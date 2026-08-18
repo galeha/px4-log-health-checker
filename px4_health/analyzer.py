@@ -114,6 +114,17 @@ def _series(name: str, unit: str, timestamps: np.ndarray, values: np.ndarray, or
     return {"name": name, "unit": unit, "points": points}
 
 
+def _multi_series(name: str, unit: str, timestamps: np.ndarray, lines: Iterable[tuple[str, np.ndarray]], origin: int) -> dict[str, Any]:
+    return {
+        "name": name,
+        "unit": unit,
+        "lines": [
+            {"name": line_name, "points": _series(line_name, unit, timestamps, values, origin)["points"]}
+            for line_name, values in lines
+        ],
+    }
+
+
 def _evidence(label: str, value: Any, unit: str = "") -> dict[str, str]:
     if isinstance(value, float):
         text = f"{value:.3g}"
@@ -403,6 +414,18 @@ def _quat_matrix(dataset, prefix: str) -> np.ndarray | None:
     return matrix
 
 
+def _quat_to_euler_deg(quaternions: np.ndarray) -> np.ndarray:
+    """Convert PX4 [w, x, y, z] quaternions to roll, pitch, yaw for display."""
+    w, x, y, z = (quaternions[:, i] for i in range(4))
+    roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+    pitch = np.arcsin(np.clip(2 * (w * y - z * x), -1.0, 1.0))
+    yaw = np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+    angles = np.column_stack([roll, pitch, yaw])
+    angles[:, 0] = np.unwrap(angles[:, 0])
+    angles[:, 2] = np.unwrap(angles[:, 2])
+    return np.degrees(angles)
+
+
 def _attitude(log: ULog, start: int, end: int) -> dict[str, Any]:
     rules = RULES["attitude"]
     actual = _dataset(log, "vehicle_attitude")
@@ -416,23 +439,48 @@ def _attitude(log: ULog, start: int, end: int) -> dict[str, Any]:
     at, aq = at[mask], aq[mask]
     if len(at) < 5:
         return _unavailable("attitude", "姿态跟踪", "飞行阶段的姿态样本不足。", log)
+    # q and -q describe the same attitude; keep setpoint signs continuous before interpolation.
+    dq = dq.copy()
+    for i in range(1, len(dq)):
+        if np.dot(dq[i - 1], dq[i]) < 0:
+            dq[i] *= -1
     interp = np.column_stack([np.interp(at, dt, dq[:, i]) for i in range(4)])
     interp /= np.maximum(np.linalg.norm(interp, axis=1)[:, None], 1e-9)
     dots = np.clip(np.abs(np.sum(aq * interp, axis=1)), 0, 1)
     error = np.degrees(2 * np.arccos(dots))
     p95, maximum = _percentile(error, 95), _percentile(error, 100)
+    actual_euler = _quat_to_euler_deg(aq)
+    desired_euler = _quat_to_euler_deg(interp)
+    # Put wrapped roll/yaw setpoints on the same displayed revolution as the actual angle.
+    for axis in (0, 2):
+        desired_euler[:, axis] += 360.0 * round((actual_euler[0, axis] - desired_euler[0, axis]) / 360.0)
+    axis_error = np.abs((actual_euler - desired_euler + 180.0) % 360.0 - 180.0)
+    axis_p95 = np.percentile(axis_error, 95, axis=0)
     rank = 0
     if p95 >= rules["p95_severe_deg"] or maximum >= rules["max_severe_deg"]:
         rank = 2
     elif p95 >= rules["p95_warning_deg"] or maximum >= rules["max_warning_deg"]:
         rank = 1
     labels = ("良好", "偏差较大", "严重偏差")
+    axis_names = ("横滚", "俯仰", "偏航")
+    evidence = [_evidence("四元数综合误差 P95", p95, "°"), _evidence("四元数最大综合误差", maximum, "°")]
+    evidence.extend(_evidence(f"{axis_names[i]}误差 P95", float(axis_p95[i]), "°") for i in range(3))
+    series = [
+        _multi_series(
+            f"{axis_names[i]}姿态",
+            "°",
+            at,
+            (("实际", actual_euler[:, i]), ("目标", desired_euler[:, i])),
+            log.start_timestamp,
+        )
+        for i in range(3)
+    ]
     return {
         "id": "attitude", "name": "姿态跟踪", "status": _status(rank), "label": labels[rank],
-        "summary": f"95% 的三轴综合姿态误差不超过 {p95:.1f}°",
-        "details": ["这里使用实际姿态与设定姿态的四元数夹角，避免欧拉角跨越 ±180° 时产生假误差。", "首版以综合跟踪误差为主；曲线中的尖峰需结合设定值变化判断是否为超调。"],
-        "evidence": [_evidence("姿态误差 P95", p95, "°"), _evidence("最大姿态误差", maximum, "°")],
-        "series": [_series("三轴综合姿态误差", "°", at, error, log.start_timestamp)],
+        "summary": f"横滚/俯仰/偏航误差 P95：{axis_p95[0]:.1f}° / {axis_p95[1]:.1f}° / {axis_p95[2]:.1f}°",
+        "details": ["健康等级仍使用实际与目标四元数的综合夹角，避免欧拉角跨越 ±180° 时产生假误差。", "展示曲线转换为横滚、俯仰、偏航三轴姿态角，每张图同时显示实际值与目标值。", "曲线中的尖峰需结合设定值变化判断是否为超调。"],
+        "evidence": evidence,
+        "series": series,
         "data_sources": [
             _source("vehicle_attitude", "q[0..3]", "飞行器实际姿态四元数", "无量纲", "作为姿态跟踪误差的实际值。"),
             _source("vehicle_attitude_setpoint", "q_d[0..3]", "姿态控制器目标四元数", "无量纲", "与实际四元数对齐后计算三轴综合夹角。"),

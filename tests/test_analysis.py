@@ -72,7 +72,15 @@ class AnalysisRuleTests(unittest.TestCase):
             Dataset("vehicle_attitude", {"timestamp": t, **quaternion}),
             Dataset("vehicle_attitude_setpoint", {"timestamp": t, **desired}),
         ])
-        self.assertEqual(_attitude(log, 0, 10_000_000)["status"], "normal")
+        result = _attitude(log, 0, 10_000_000)
+        self.assertEqual(result["status"], "normal")
+        self.assertEqual([series["name"] for series in result["series"]], ["横滚姿态", "俯仰姿态", "偏航姿态"])
+        self.assertTrue(all([line["name"] for line in series["lines"]] == ["实际", "目标"] for series in result["series"]))
+        evidence_labels = [item["label"] for item in result["evidence"]]
+        self.assertIn("四元数综合误差 P95", evidence_labels)
+        self.assertIn("横滚误差 P95", evidence_labels)
+        self.assertIn("俯仰误差 P95", evidence_labels)
+        self.assertIn("偏航误差 P95", evidence_labels)
 
     def test_sustained_motor_saturation_is_severe(self):
         t = timestamps()

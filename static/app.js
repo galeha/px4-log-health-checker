@@ -132,25 +132,30 @@ function parameterSection(parameters) {
 }
 
 function chart(series) {
-  const points = series.points;
-  if (!points.length) return "";
+  const lines = series.lines || [{name: series.name, points: series.points || []}];
+  const allPoints = lines.flatMap((line) => line.points);
+  if (!allPoints.length) return "";
   const width = 540, height = 175, left = 43, right = 10, top = 12, bottom = 25;
-  const xs = points.map((point) => point[0]), ys = points.map((point) => point[1]);
+  const xs = allPoints.map((point) => point[0]), ys = allPoints.map((point) => point[1]);
   let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   if (maxX === minX) maxX = minX + 1;
   if (maxY === minY) { maxY += 1; minY -= 1; }
   const padY = (maxY - minY) * .08; minY -= padY; maxY += padY;
   const x = (value) => left + (value - minX) / (maxX - minX) * (width - left - right);
   const y = (value) => top + (maxY - value) / (maxY - minY) * (height - top - bottom);
-  const polyline = points.map((point) => `${x(point[0]).toFixed(1)},${y(point[1]).toFixed(1)}`).join(" ");
+  const polylines = lines.map((line, index) => {
+    const points = line.points.map((point) => `${x(point[0]).toFixed(1)},${y(point[1]).toFixed(1)}`).join(" ");
+    return `<polyline class="plot-line line-${index}" points="${points}"/>`;
+  }).join("");
   const grid = [0, .5, 1].map((fraction) => {
     const gy = top + fraction * (height - top - bottom);
     const value = maxY - fraction * (maxY - minY);
     return `<line class="grid-line" x1="${left}" x2="${width-right}" y1="${gy}" y2="${gy}"/><text x="2" y="${gy+3}">${formatNumber(value)}</text>`;
   }).join("");
-  return `<div class="chart"><h4>${escapeHtml(series.name)}${series.unit ? `（${escapeHtml(series.unit)}）` : ""}</h4>
+  const legend = lines.length > 1 ? `<div class="chart-legend">${lines.map((line, index) => `<span><i class="legend-${index}"></i>${escapeHtml(line.name)}</span>`).join("")}</div>` : "";
+  return `<div class="chart"><div class="chart-title"><h4>${escapeHtml(series.name)}${series.unit ? `（${escapeHtml(series.unit)}）` : ""}</h4>${legend}</div>
     <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(series.name)}曲线">
-      ${grid}<polyline class="plot-line" points="${polyline}"/>
+      ${grid}${polylines}
       <text x="${left}" y="${height-4}">${formatNumber(minX)}s</text><text x="${width-right-35}" y="${height-4}">${formatNumber(maxX)}s</text>
     </svg></div>`;
 }

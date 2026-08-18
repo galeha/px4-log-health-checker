@@ -1,5 +1,5 @@
 {
-  "version": "v1.1.0",
+  "version": "v1.2.0",
   "vibration": {
     "accel_axis_rms_warning_m_s2": 3.0,
     "accel_axis_rms_severe_m_s2": 6.0,
