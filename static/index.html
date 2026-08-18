@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>PX4 飞行健康检查器</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="返回首页">
+      <span class="brand-mark">PX4</span>
+      <span>飞行健康检查器</span>
+    </a>
+    <span class="local-badge"><i></i> 本机离线分析</span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">给普通 PX4 用户的中文飞后检查</p>
+        <h1>拖入日志，先看结论，<br>需要时再看曲线。</h1>
+        <p class="intro">首版检查多旋翼的振动、GPS、电池压降、姿态跟踪和电机输出余量。日志不会离开你的电脑。</p>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="radar-ring ring-one"></div>
+        <div class="radar-ring ring-two"></div>
+        <div class="radar-core">5<span>项检查</span></div>
+        <div class="pulse-dot dot-one"></div>
+        <div class="pulse-dot dot-two"></div>
+      </div>
+    </section>
+
+    <section id="uploadPanel" class="upload-panel">
+      <input id="fileInput" type="file" accept=".ulg" hidden>
+      <div class="upload-icon" aria-hidden="true">↥</div>
+      <div>
+        <h2>选择一份 PX4 ULog</h2>
+        <p>拖放 `.ulg` 到这里，或点击选择文件；最大 512 MB</p>
+      </div>
+      <button id="pickButton" class="primary-button" type="button">选择日志</button>
+    </section>
+
+    <section id="progressPanel" class="progress-panel hidden" aria-live="polite">
+      <div class="spinner"></div>
+      <div>
+        <strong id="progressTitle">正在读取日志</strong>
+        <p id="progressText">正在提取飞行阶段和关键主题…</p>
+      </div>
+    </section>
+
+    <section id="errorPanel" class="error-panel hidden" role="alert">
+      <div><strong>无法完成分析</strong><p id="errorText"></p></div>
+      <button id="retryButton" type="button">重新选择</button>
+    </section>
+
+    <section id="results" class="results hidden">
+      <div class="result-heading">
+        <div>
+          <p class="eyebrow">分析完成</p>
+          <h2 id="overallTitle">飞行健康概览</h2>
+          <p id="scopeText"></p>
+        </div>
+        <button id="newFileButton" class="secondary-button" type="button">分析另一份日志</button>
+      </div>
+
+      <div id="metaGrid" class="meta-grid"></div>
+      <div id="metricGrid" class="metric-grid"></div>
+      <p id="disclaimer" class="disclaimer"></p>
+    </section>
+  </main>
+
+  <footer>
+    <span>PX4 Log Health Checker · 规则结果可追溯</span>
+    <span>不上传 · 不保存 · 不修改参数</span>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>
+

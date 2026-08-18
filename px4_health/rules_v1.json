@@ -1,0 +1,44 @@
+{
+  "version": "v1.0.0",
+  "vibration": {
+    "accel_rms_warning_m_s2": 3.0,
+    "accel_rms_severe_m_s2": 6.0,
+    "clip_warning_count": 1,
+    "clip_severe_count": 100,
+    "vibe_warning": [0.01, 0.01, 0.10],
+    "vibe_severe": [0.03, 0.03, 0.30]
+  },
+  "gps": {
+    "fix_bad_fraction_warning": 0.01,
+    "fix_bad_fraction_severe": 0.10,
+    "satellites_warning": 8,
+    "satellites_severe": 6,
+    "eph_warning_m": 2.0,
+    "eph_severe_m": 5.0,
+    "epv_warning_m": 3.0,
+    "epv_severe_m": 8.0
+  },
+  "battery": {
+    "sag_warning_v_per_cell": 0.25,
+    "sag_severe_v_per_cell": 0.40,
+    "cell_delta_warning_v": 0.08,
+    "cell_delta_severe_v": 0.15
+  },
+  "attitude": {
+    "p95_warning_deg": 5.0,
+    "p95_severe_deg": 10.0,
+    "max_warning_deg": 20.0,
+    "max_severe_deg": 35.0,
+    "step_min_deg": 5.0,
+    "overshoot_warning_percent": 25.0,
+    "overshoot_severe_percent": 50.0
+  },
+  "motors": {
+    "p95_warning": 0.80,
+    "p95_severe": 0.95,
+    "saturation_level": 0.95,
+    "saturation_fraction_warning": 0.01,
+    "saturation_fraction_severe": 0.05
+  }
+}
+

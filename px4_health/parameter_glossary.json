@@ -1,0 +1,38 @@
+{
+  "vibration": [
+    {"name": "IMU_GYRO_CUTOFF", "zh": "陀螺仪低通截止频率", "unit": "Hz", "note": "影响陀螺仪噪声与控制延迟；不要仅为压低曲线而盲目调低。"},
+    {"name": "IMU_DGYRO_CUTOFF", "zh": "角加速度低通截止频率", "unit": "Hz", "note": "影响 D 项噪声；应结合机架振动和控制响应调整。"},
+    {"name": "IMU_ACCEL_CUTOFF", "zh": "加速度计低通截止频率", "unit": "Hz", "note": "影响加速度测量噪声与响应速度。"}
+  ],
+  "gps": [
+    {"name": "EKF2_GPS_CHECK", "zh": "GPS 起飞前质量检查开关", "unit": "位掩码", "note": "决定 EKF 在使用 GPS 前检查哪些质量项目。"},
+    {"name": "EKF2_REQ_NSATS", "zh": "最少卫星数", "unit": "颗", "note": "卫星数低于要求时，GPS 可能不能通过 EKF 检查。"},
+    {"name": "EKF2_REQ_EPH", "zh": "最大允许水平位置误差", "unit": "m", "note": "数值越小，GPS 水平精度要求越严格。"},
+    {"name": "EKF2_REQ_EPV", "zh": "最大允许垂直位置误差", "unit": "m", "note": "数值越小，GPS 高度精度要求越严格。"},
+    {"name": "GPS_1_CONFIG", "zh": "主 GPS 接口配置", "unit": "枚举", "note": "决定主 GPS 使用的硬件接口。"}
+  ],
+  "battery": [
+    {"name": "BAT1_N_CELLS", "zh": "电池串数", "unit": "S", "note": "串数错误会使单体电压和剩余电量判断失真。"},
+    {"name": "BAT1_V_EMPTY", "zh": "单体空电电压", "unit": "V", "note": "用于估算低电量，不能低于电池安全放电范围。"},
+    {"name": "BAT1_V_CHARGED", "zh": "单体满电电压", "unit": "V", "note": "应与实际电池化学体系一致。"},
+    {"name": "BAT1_R_INTERNAL", "zh": "单体内阻估计", "unit": "Ω", "note": "用于补偿负载压降；错误值会影响剩余电量估算。"},
+    {"name": "BAT1_LOW_THR", "zh": "低电量告警阈值", "unit": "比例", "note": "达到该剩余比例时触发低电量告警。"},
+    {"name": "BAT1_CRIT_THR", "zh": "严重低电量阈值", "unit": "比例", "note": "达到该剩余比例时触发严重告警。"}
+  ],
+  "attitude": [
+    {"name": "MC_ROLL_P", "zh": "横滚角度环比例", "unit": "1/s", "note": "影响横滚角度跟随速度；过大会增加超调风险。"},
+    {"name": "MC_PITCH_P", "zh": "俯仰角度环比例", "unit": "1/s", "note": "影响俯仰角度跟随速度；应与机体响应匹配。"},
+    {"name": "MC_YAW_P", "zh": "偏航角度环比例", "unit": "1/s", "note": "影响偏航角度跟踪速度。"},
+    {"name": "MC_ROLLRATE_P", "zh": "横滚角速度比例增益", "unit": "", "note": "影响横滚速率误差的即时校正。"},
+    {"name": "MC_PITCHRATE_P", "zh": "俯仰角速度比例增益", "unit": "", "note": "影响俯仰速率误差的即时校正。"},
+    {"name": "MC_YAWRATE_P", "zh": "偏航角速度比例增益", "unit": "", "note": "影响偏航速率误差的即时校正。"}
+  ],
+  "motors": [
+    {"name": "MPC_THR_HOVER", "zh": "悬停推力估计", "unit": "归一化", "note": "反映悬停所需推力，过高通常意味着推重比较低。"},
+    {"name": "MPC_THR_MAX", "zh": "位置控制最大推力", "unit": "归一化", "note": "限制位置控制器可请求的最大推力。"},
+    {"name": "MOT_SLEW_MAX", "zh": "电机输出变化率限制", "unit": "1/s", "note": "限制电机命令变化速度，过小会降低快速响应能力。"},
+    {"name": "PWM_MAIN_MIN", "zh": "主输出最小 PWM", "unit": "µs", "note": "传统 PWM 输出的下限。"},
+    {"name": "PWM_MAIN_MAX", "zh": "主输出最大 PWM", "unit": "µs", "note": "传统 PWM 输出的上限。"}
+  ]
+}
+
