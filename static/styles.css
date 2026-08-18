@@ -45,7 +45,7 @@ button { cursor: pointer; }
 main { max-width: 1180px; margin: auto; padding: 30px 24px 70px; }
 .hero { min-height: 390px; display: grid; grid-template-columns: 1.3fr .7fr; gap: 40px; align-items: center; }
 .eyebrow { margin: 0 0 12px; color: var(--green); font-weight: 800; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
-h1 { max-width: 780px; margin: 0; font-size: clamp(40px, 6vw, 72px); line-height: 1.08; letter-spacing: -.045em; font-weight: 800; }
+h1 { max-width: 780px; margin: 0; font-size: clamp(34px, 4.8vw, 58px); line-height: 1.12; letter-spacing: -.04em; font-weight: 800; }
 .intro { max-width: 690px; margin: 25px 0 0; color: var(--muted); font-size: 17px; line-height: 1.8; }
 .hero-visual { position: relative; width: 280px; height: 280px; justify-self: end; }
 .radar-ring { position: absolute; border: 1px solid rgba(10,123,98,.22); border-radius: 50%; inset: 0; }
@@ -96,18 +96,27 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(40px, 6vw, 72px); line-height
 .meta-grid { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
 .meta-item { min-width: 0; padding: 14px 16px; background: rgba(255,255,255,.7); border: 1px solid var(--line); border-radius: 13px; }
 .meta-item span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
-.meta-item strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+.meta-value { position: relative; min-width: 0; outline: none; }
+.meta-value strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+.meta-value.has-tooltip { cursor: help; border-bottom: 1px dashed #9baba6; }
+.meta-tooltip { position: absolute; z-index: 30; left: 0; bottom: calc(100% + 9px); width: max-content; max-width: min(480px, 80vw); padding: 11px 13px; border-radius: 10px; color: #edf8f4; background: #183e35; box-shadow: 0 12px 30px rgba(21,52,45,.22); font-size: 12px; font-weight: 400; line-height: 1.55; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(5px); transition: opacity .16s, transform .16s, visibility .16s; }
+.meta-value.has-tooltip:hover .meta-tooltip, .meta-value.has-tooltip:focus .meta-tooltip { opacity: 1; visibility: visible; transform: translateY(0); }
 
 .metric-grid { display: grid; gap: 13px; }
-.metric-card { border: 1px solid var(--line); border-radius: 19px; background: var(--panel); box-shadow: 0 8px 28px rgba(31,48,44,.05); overflow: hidden; }
+.metric-card { position: relative; border: 1px solid var(--line); border-radius: 19px; background: var(--panel); box-shadow: 0 8px 28px rgba(31,48,44,.05); overflow: visible; }
 .metric-summary { width: 100%; display: grid; grid-template-columns: 60px 180px 140px 1fr 32px; align-items: center; gap: 18px; padding: 20px 22px; color: inherit; background: transparent; border: 0; text-align: left; }
 .metric-number { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: #f0f3f2; color: #71807c; font-weight: 800; }
 .metric-name { font-weight: 800; }
-.status-pill { justify-self: start; padding: 7px 11px; border-radius: 99px; font-weight: 800; font-size: 13px; }
+.status-pill { position: relative; justify-self: start; padding: 7px 11px; border-radius: 99px; font-weight: 800; font-size: 13px; cursor: help; }
 .metric-card.normal .status-pill { color: var(--green); background: var(--green-soft); }
 .metric-card.warning .status-pill { color: var(--amber); background: var(--amber-soft); }
 .metric-card.severe .status-pill { color: var(--red); background: var(--red-soft); }
 .metric-card.unavailable .status-pill { color: var(--gray); background: var(--gray-soft); }
+.status-tooltip { position: absolute; z-index: 35; left: 50%; top: calc(100% + 9px); width: 310px; padding: 11px 13px; border-radius: 10px; color: #edf8f4; background: #183e35; box-shadow: 0 12px 30px rgba(21,52,45,.22); font-size: 12px; font-weight: 400; line-height: 1.55; opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, -5px); transition: opacity .16s, transform .16s, visibility .16s; }
+.status-tooltip strong, .status-tooltip span { display: block; }
+.status-tooltip strong { margin-bottom: 5px; color: #fff; }
+.status-tooltip span { color: #c7ddd6; white-space: nowrap; }
+.status-pill:hover .status-tooltip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
 .metric-brief { color: var(--muted); font-size: 14px; }
 .chevron { font-size: 24px; color: #85908e; transition: transform .2s; }
 .metric-card.open .chevron { transform: rotate(180deg); }
@@ -126,7 +135,13 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(40px, 6vw, 72px); line-height
 .stat-tooltip { position: absolute; z-index: 25; left: 50%; bottom: calc(100% + 10px); width: 280px; padding: 12px 13px; border-radius: 11px; color: #edf8f4; background: #183e35; box-shadow: 0 12px 30px rgba(21,52,45,.22); font-size: 12px; font-weight: 400; line-height: 1.65; opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, 5px); transition: opacity .16s, transform .16s, visibility .16s; }
 .stat-tooltip::after { content: ""; position: absolute; left: 50%; top: 100%; margin-left: -6px; border: 6px solid transparent; border-top-color: #183e35; }
 .stat-term:hover .stat-tooltip, .stat-term:focus .stat-tooltip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
-.detail-note { margin: 12px 0; color: #56625f; font-size: 13px; line-height: 1.75; }
+.detail-help { position: relative; display: inline-block; margin: 8px 0 4px; outline: none; cursor: help; }
+.detail-help-label { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; border-radius: 9px; color: #52635e; background: #eef3f1; font-size: 12px; font-weight: 750; }
+.detail-help-label sup { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; color: #fff; background: #78968e; font-size: 8px; }
+.detail-tooltip { position: absolute; z-index: 30; left: 0; top: calc(100% + 9px); width: 390px; max-width: 80vw; padding: 12px 14px; border-radius: 11px; color: #d3e5df; background: #183e35; box-shadow: 0 12px 30px rgba(21,52,45,.22); font-size: 12px; font-weight: 400; line-height: 1.65; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-5px); transition: opacity .16s, transform .16s, visibility .16s; }
+.detail-tooltip span { display: block; }
+.detail-tooltip span + span { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.12); }
+.detail-help:hover .detail-tooltip, .detail-help:focus .detail-tooltip { opacity: 1; visibility: visible; transform: translateY(0); }
 .source-section { margin: 16px 0 18px; padding: 15px 16px; border: 1px solid #dce7e3; border-radius: 14px; background: #f8fbfa; }
 .source-section h4 { margin: 0 0 10px; font-size: 13px; }
 .source-list { display: flex; flex-wrap: wrap; gap: 8px; }

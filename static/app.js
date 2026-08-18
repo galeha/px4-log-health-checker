@@ -4,6 +4,7 @@ const fileInput = $("#fileInput");
 const progressPanel = $("#progressPanel");
 const errorPanel = $("#errorPanel");
 const results = $("#results");
+let selectedFileAddress = "";
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -42,6 +43,7 @@ async function analyze(file) {
     showError("请选择扩展名为 .ulg 的 PX4 日志。");
     return;
   }
+  selectedFileAddress = file.path || file.webkitRelativePath || "";
   showOnly(progressPanel);
   $("#progressTitle").textContent = `正在分析 ${file.name}`;
   $("#progressText").textContent = "正在识别飞行阶段、计算五项健康指标…";
@@ -68,15 +70,18 @@ function renderResults(data) {
   $("#overallTitle").textContent = data.overall;
   $("#scopeText").textContent = data.meta.scope;
   $("#disclaimer").textContent = `安全提示：${data.disclaimer}`;
+  const fileAddressHint = selectedFileAddress
+    ? `日志地址：${selectedFileAddress}`
+    : `浏览器安全限制：无法读取原始完整地址。当前文件名：${data.meta.filename}`;
   const meta = [
-    ["日志文件", data.meta.filename],
-    ["机型", data.meta.vehicle_type],
+    ["日志文件", data.meta.filename, fileAddressHint],
+    ["机型（目前只分析多旋翼）", data.meta.vehicle_type],
     ["日志时长", `${data.meta.duration_s} 秒`],
     ["分析时段", `${data.meta.flight_duration_s} 秒`],
     ["规则版本", data.meta.rule_version],
   ];
-  $("#metaGrid").innerHTML = meta.map(([label, value]) =>
-    `<div class="meta-item"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`
+  $("#metaGrid").innerHTML = meta.map(([label, value, hint]) =>
+    `<div class="meta-item"><span>${escapeHtml(label)}</span><div class="meta-value${hint ? " has-tooltip" : ""}" ${hint ? 'tabindex="0"' : ""}><strong>${escapeHtml(value)}</strong>${hint ? `<span class="meta-tooltip" role="tooltip">${escapeHtml(hint)}</span>` : ""}</div></div>`
   ).join("");
   $("#metricGrid").innerHTML = data.metrics.map((metric, index) => metricCard(metric, index)).join("");
   document.querySelectorAll(".metric-summary").forEach((button) => button.addEventListener("click", () => {
@@ -91,6 +96,14 @@ const percentileHelp = {
   "P90": "第 90 百分位：约 90% 的样本不高于它、10% 的样本高于它，通常用来观察偏高的一侧。",
   "P95": "第 95 百分位：约 95% 的样本不高于它，只忽略最高 5% 的短暂极端值。它不是最大值的 95%。",
   "P90-P10": "第 90 百分位减第 10 百分位，表示中间约 80% 样本的典型变化范围，可减少两端偶然尖峰的影响。",
+};
+
+const metricLevels = {
+  "vibration": ["正常", "偏大", "严重", "数据不足"],
+  "gps": ["良好", "较差", "异常", "数据不足"],
+  "battery": ["正常", "明显", "严重", "数据不足"],
+  "attitude": ["良好", "偏差较大", "严重偏差", "数据不足"],
+  "motors": ["正常", "接近饱和", "饱和风险高", "数据不足"],
 };
 
 function formatEvidenceLabel(label) {
@@ -109,7 +122,7 @@ function metricCard(metric, index) {
   const evidence = metric.evidence.length
     ? `<div class="evidence-grid">${metric.evidence.map((item) => `<div class="evidence ${escapeHtml(item.status || "")}"><span class="evidence-label">${formatEvidenceLabel(item.label)}</span><strong>${escapeHtml(item.value)}</strong>${item.result ? `<em>${escapeHtml(item.result)}</em>` : ""}</div>`).join("")}</div>`
     : "";
-  const notes = metric.details.map((note) => `<p class="detail-note">${escapeHtml(note)}</p>`).join("");
+  const notes = detailHelp(metric.details || []);
   const sources = sourceSection(metric.data_sources || []);
   const charts = metric.series.length ? `<div class="chart-grid">${metric.series.map(chart).join("")}</div>` : "";
   const params = parameterSection(metric.parameters);
@@ -117,12 +130,17 @@ function metricCard(metric, index) {
     <button class="metric-summary" type="button" aria-label="展开${escapeHtml(metric.name)}详情">
       <span class="metric-number">0${index + 1}</span>
       <span class="metric-name">${escapeHtml(metric.name)}</span>
-      <span class="status-pill">${escapeHtml(metric.label)}</span>
+      <span class="status-pill">${escapeHtml(metric.label)}<span class="status-tooltip" role="tooltip"><strong>全部判断等级</strong><span>${(metricLevels[metric.id] || ["正常", "提醒", "严重", "数据不足"]).map(escapeHtml).join("　/　")}</span></span></span>
       <span class="metric-brief">${escapeHtml(metric.summary)}</span>
       <span class="chevron">⌄</span>
     </button>
     <div class="metric-details">${evidence}${sources}${notes}${charts}${params}</div>
   </article>`;
+}
+
+function detailHelp(details) {
+  if (!details.length) return "";
+  return `<div class="detail-help" tabindex="0"><span class="detail-help-label">判断说明 <sup>i</sup></span><span class="detail-tooltip" role="tooltip">${details.map((note) => `<span>${escapeHtml(note)}</span>`).join("")}</span></div>`;
 }
 
 function sourceSection(sources) {
