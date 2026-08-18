@@ -124,7 +124,6 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(40px, 6vw, 72px); line-height
 .detail-note { margin: 12px 0; color: #56625f; font-size: 13px; line-height: 1.75; }
 .source-section { margin: 16px 0 18px; padding: 15px 16px; border: 1px solid #dce7e3; border-radius: 14px; background: #f8fbfa; }
 .source-section h4 { margin: 0 0 10px; font-size: 13px; }
-.source-section > p { margin: 9px 0 0; color: var(--muted); font-size: 11px; }
 .source-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .source-row { display: inline-flex; align-items: center; padding: 7px 10px; border: 1px solid #d8e3df; border-radius: 9px; background: #fff; font-family: Consolas, "SFMono-Regular", monospace; font-size: 12px; }
 .source-topic { color: #6b7774; }

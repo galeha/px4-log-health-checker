@@ -115,7 +115,7 @@ function sourceSection(sources) {
       <span class="field-tooltip" role="tooltip"><strong>${escapeHtml(source.zh)}</strong><span>单位：${escapeHtml(source.unit || "无")}</span><span>${escapeHtml(source.usage)}</span></span>
     </span>
   </div>`).join("");
-  return `<section class="source-section"><h4>ULog 计算数据来源</h4><div class="source-list">${rows}</div><p>将鼠标放到字段名上可查看中文注解。</p></section>`;
+  return `<section class="source-section"><h4>ULog 计算数据来源</h4><div class="source-list">${rows}</div></section>`;
 }
 
 function parameterSection(parameters) {

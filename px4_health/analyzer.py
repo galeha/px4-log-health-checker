@@ -323,7 +323,7 @@ def _gps(log: ULog, start: int, end: int) -> dict[str, Any]:
             _source(gps.name, "fix_type", "GPS 定位类型", "枚举", "统计未达到 3D 定位的样本占比。"),
             _source(gps.name, "satellites_used", "参与定位的卫星数量", "颗", "使用 P10 反映飞行中较差时段的卫星数量。"),
             _source(gps.name, "eph / epv", "水平/垂直位置精度估计", "m", "使用 P95 判断飞行中较差时段的定位精度。"),
-            _source(gps.name, "jamming_state / spoofing_state", "GPS 干扰/欺骗状态", "枚举", "检查接收机是否报告干扰或欺骗。"),
+            _source(gps.name, "jamming_state / spoofing_state", "GPS 干扰/欺骗状态", "枚举", "检查接收机是否报告干扰或欺骗。只有接收机和 GNSS 模块具备干扰、欺骗检测能力时，这两个字段才有诊断意义。"),
         ],
         "parameters": _parameters(log, "gps"),
     }
