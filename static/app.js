@@ -86,9 +86,28 @@ function renderResults(data) {
   results.scrollIntoView({behavior: "smooth", block: "start"});
 }
 
+const percentileHelp = {
+  "P10": "第 10 百分位：约 10% 的样本低于它、90% 的样本不低于它，通常用来观察偏低的一侧。",
+  "P90": "第 90 百分位：约 90% 的样本不高于它、10% 的样本高于它，通常用来观察偏高的一侧。",
+  "P95": "第 95 百分位：约 95% 的样本不高于它，只忽略最高 5% 的短暂极端值。它不是最大值的 95%。",
+  "P90-P10": "第 90 百分位减第 10 百分位，表示中间约 80% 样本的典型变化范围，可减少两端偶然尖峰的影响。",
+};
+
+function formatEvidenceLabel(label) {
+  const pattern = /P90-P10|P10|P90|P95/g;
+  let result = "", cursor = 0, match;
+  while ((match = pattern.exec(label)) !== null) {
+    result += escapeHtml(label.slice(cursor, match.index));
+    const term = match[0];
+    result += `<span class="stat-term" tabindex="0">${term}<sup>i</sup><span class="stat-tooltip" role="tooltip">${escapeHtml(percentileHelp[term])}</span></span>`;
+    cursor = match.index + term.length;
+  }
+  return result + escapeHtml(label.slice(cursor));
+}
+
 function metricCard(metric, index) {
   const evidence = metric.evidence.length
-    ? `<div class="evidence-grid">${metric.evidence.map((item) => `<div class="evidence ${escapeHtml(item.status || "")}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong>${item.result ? `<em>${escapeHtml(item.result)}</em>` : ""}</div>`).join("")}</div>`
+    ? `<div class="evidence-grid">${metric.evidence.map((item) => `<div class="evidence ${escapeHtml(item.status || "")}"><span class="evidence-label">${formatEvidenceLabel(item.label)}</span><strong>${escapeHtml(item.value)}</strong>${item.result ? `<em>${escapeHtml(item.result)}</em>` : ""}</div>`).join("")}</div>`
     : "";
   const notes = metric.details.map((note) => `<p class="detail-note">${escapeHtml(note)}</p>`).join("");
   const sources = sourceSection(metric.data_sources || []);
