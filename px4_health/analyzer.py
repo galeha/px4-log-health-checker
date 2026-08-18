@@ -122,6 +122,10 @@ def _evidence(label: str, value: Any, unit: str = "") -> dict[str, str]:
     return {"label": label, "value": f"{text}{(' ' + unit) if unit else ''}"}
 
 
+def _source(topic: str, field: str, zh: str, unit: str, usage: str) -> dict[str, str]:
+    return {"topic": topic, "field": field, "zh": zh, "unit": unit, "usage": usage}
+
+
 def _parameters(log: ULog, group: str) -> list[dict[str, Any]]:
     initial = log.initial_parameters or {}
     changed = {item[1]: item[2] for item in (log.changed_parameters or []) if len(item) >= 3}
@@ -145,6 +149,7 @@ def _unavailable(metric_id: str, name: str, reason: str, log: ULog) -> dict[str,
         "details": [reason],
         "evidence": [],
         "series": [],
+        "data_sources": [],
         "parameters": _parameters(log, metric_id),
     }
 
@@ -152,19 +157,27 @@ def _unavailable(metric_id: str, name: str, reason: str, log: ULog) -> dict[str,
 def _vibration(log: ULog, start: int, end: int) -> dict[str, Any]:
     rules = RULES["vibration"]
     clip_count = 0
+    data_sources = []
     clip_dataset = _dataset(log, "sensor_accel")
+    has_clip_data = False
     for axis in range(3):
         _, values = _masked(clip_dataset, start, end, f"clip_counter[{axis}]")
         clean = _finite(values)
         if clean.size:
+            has_clip_data = True
             clip_count += max(0, int(clean[-1] - clean[0]))
+    if has_clip_data:
+        data_sources.append(_source(
+            "sensor_accel", "clip_counter[0..2]", "三轴加速度计削波累计计数", "次",
+            "用飞行结束值减去开始值，判断传感器是否超过量程。",
+        ))
 
     combined = _dataset(log, "sensor_combined")
     ts = _field(combined, "timestamp")
     axes = [_field(combined, f"accelerometer_m_s2[{i}]") for i in range(3)]
-    accel_rms = math.nan
+    accel_axis_rms = np.asarray([])
     rms_ts = np.asarray([])
-    rms_values = np.asarray([])
+    rms_axis_values: list[np.ndarray] = []
     if ts is not None and all(axis is not None for axis in axes):
         ts = np.asarray(ts, dtype=np.int64)
         mask = (ts >= start) & (ts <= end)
@@ -173,11 +186,17 @@ def _vibration(log: ULog, start: int, end: int) -> dict[str, Any]:
         if len(matrix) >= 20:
             # Adjacent-sample differences reject gravity and slow manoeuvres while retaining high-frequency motion.
             residual = np.diff(matrix, axis=0) / math.sqrt(2.0)
-            magnitude = np.sqrt(np.mean(residual * residual, axis=1))
-            accel_rms = float(np.sqrt(np.mean(magnitude * magnitude)))
-            chunk = max(10, len(magnitude) // 200)
-            rms_values = np.asarray([np.sqrt(np.mean(magnitude[i:i + chunk] ** 2)) for i in range(0, len(magnitude), chunk)])
-            rms_ts = ts[1:][::chunk][: len(rms_values)]
+            accel_axis_rms = np.sqrt(np.mean(residual * residual, axis=0))
+            chunk = max(10, len(residual) // 200)
+            rms_axis_values = [
+                np.asarray([np.sqrt(np.mean(residual[i:i + chunk, axis] ** 2)) for i in range(0, len(residual), chunk)])
+                for axis in range(3)
+            ]
+            rms_ts = ts[1:][::chunk][: len(rms_axis_values[0])]
+            data_sources.insert(0, _source(
+                "sensor_combined", "accelerometer_m_s2[0..2]", "机体系 X/Y/Z 三轴加速度", "m/s²",
+                "分别对 X、Y、Z 轴相邻采样差分，并计算各轴高频加速度 RMS。",
+            ))
 
     est = _dataset(log, "estimator_status")
     vibe_p95 = []
@@ -187,6 +206,11 @@ def _vibration(log: ULog, start: int, end: int) -> dict[str, Any]:
         if vv.size:
             vibe_p95.append(_percentile(np.abs(vv), 95))
             vibe_series.append(_series(f"EKF 振动 {axis + 1}", "", vt, vv, log.start_timestamp))
+    if vibe_p95:
+        data_sources.append(_source(
+            "estimator_status", "vibe[0..2]", "EKF 圆锥、高频角增量和速度增量振动指标", "无统一单位",
+            "分别取绝对值 P95，作为惯性估计受振动影响的辅助证据。",
+        ))
 
     rank = 0
     reasons = []
@@ -196,36 +220,52 @@ def _vibration(log: ULog, start: int, end: int) -> dict[str, Any]:
     elif clip_count >= rules["clip_warning_count"]:
         rank = max(rank, 1)
         reasons.append("检测到加速度计削波")
-    if math.isfinite(accel_rms):
-        if accel_rms >= rules["accel_rms_severe_m_s2"]:
+    worst_axis = None
+    if accel_axis_rms.size:
+        worst_axis = int(np.argmax(accel_axis_rms))
+        worst_value = float(accel_axis_rms[worst_axis])
+        axis_name = "XYZ"[worst_axis]
+        if worst_value >= rules["accel_axis_rms_severe_m_s2"]:
             rank = 2
-            reasons.append("高频加速度强度达到严重阈值")
-        elif accel_rms >= rules["accel_rms_warning_m_s2"]:
+            reasons.append(f"{axis_name} 轴高频加速度 RMS 达到严重阈值")
+        elif worst_value >= rules["accel_axis_rms_warning_m_s2"]:
             rank = max(rank, 1)
-            reasons.append("高频加速度强度偏大")
+            reasons.append(f"{axis_name} 轴高频加速度 RMS 偏大")
     for i, value in enumerate(vibe_p95):
         if value >= rules["vibe_severe"][i]:
             rank = 2
         elif value >= rules["vibe_warning"][i]:
             rank = max(rank, 1)
 
-    if not math.isfinite(accel_rms) and not vibe_p95 and clip_count == 0:
+    if not accel_axis_rms.size and not vibe_p95 and clip_count == 0:
         return _unavailable("vibration", "机体振动", "日志缺少可用的加速度或 EKF 振动数据。", log)
 
     labels = ("正常", "偏大", "严重")
     summary = reasons[0] if reasons else "未发现明显高频振动或传感器削波"
     evidence = [_evidence("加速度计削波次数", clip_count, "次")]
     series = vibe_series
-    if math.isfinite(accel_rms):
-        evidence.insert(0, _evidence("高频加速度 RMS", accel_rms, "m/s²"))
-        series.insert(0, _series("高频加速度 RMS", "m/s²", rms_ts, rms_values, log.start_timestamp))
+    if accel_axis_rms.size:
+        axis_evidence = []
+        for i, axis in enumerate("XYZ"):
+            value = float(accel_axis_rms[i])
+            axis_rank = 2 if value >= rules["accel_axis_rms_severe_m_s2"] else 1 if value >= rules["accel_axis_rms_warning_m_s2"] else 0
+            item = _evidence(f"{axis} 轴高频加速度 RMS", value, "m/s²")
+            item["status"] = _status(axis_rank)
+            item["result"] = ("正常", "偏大", "严重")[axis_rank]
+            axis_evidence.append(item)
+        evidence = axis_evidence + evidence
+        axis_series = [
+            _series(f"{axis} 轴高频加速度 RMS", "m/s²", rms_ts, rms_axis_values[i], log.start_timestamp)
+            for i, axis in enumerate("XYZ")
+        ]
+        series = axis_series + series
     for i, value in enumerate(vibe_p95):
         evidence.append(_evidence(f"EKF vibe[{i}] P95", value))
     return {
         "id": "vibration", "name": "机体振动", "status": _status(rank), "label": labels[rank],
         "summary": summary,
-        "details": ["优先检查桨叶、机臂、飞控减振和螺丝松动。", "高频加速度 RMS 是本工具的辅助指标，需结合削波与 EKF 状态判断。"],
-        "evidence": evidence, "series": series, "parameters": _parameters(log, "vibration"),
+        "details": ["X/Y/Z 三轴分别计算，最终等级由 RMS 最大的轴决定。", "优先检查桨叶、机臂、飞控减振和螺丝松动。", "高频加速度 RMS 是本工具的辅助指标，需结合削波与 EKF 状态判断。"],
+        "evidence": evidence, "series": series, "data_sources": data_sources, "parameters": _parameters(log, "vibration"),
     }
 
 
@@ -278,7 +318,14 @@ def _gps(log: ULog, start: int, end: int) -> dict[str, Any]:
         "id": "gps", "name": "GPS 状态", "status": _status(rank), "label": labels[rank],
         "summary": reasons[0] if reasons else "飞行阶段保持 3D 定位，精度和卫星数处于首版建议范围",
         "details": ["EPH/EPV 越小越好；卫星数只是辅助指标，还要结合定位精度和干扰状态。"],
-        "evidence": evidence, "series": series, "parameters": _parameters(log, "gps"),
+        "evidence": evidence, "series": series,
+        "data_sources": [
+            _source(gps.name, "fix_type", "GPS 定位类型", "枚举", "统计未达到 3D 定位的样本占比。"),
+            _source(gps.name, "satellites_used", "参与定位的卫星数量", "颗", "使用 P10 反映飞行中较差时段的卫星数量。"),
+            _source(gps.name, "eph / epv", "水平/垂直位置精度估计", "m", "使用 P95 判断飞行中较差时段的定位精度。"),
+            _source(gps.name, "jamming_state / spoofing_state", "GPS 干扰/欺骗状态", "枚举", "检查接收机是否报告干扰或欺骗。"),
+        ],
+        "parameters": _parameters(log, "gps"),
     }
 
 
@@ -335,6 +382,12 @@ def _battery(log: ULog, start: int, end: int) -> dict[str, Any]:
         "details": ["P90-P10 同时包含负载压降与飞行期间的自然放电，不能单独等同于电池内阻。", "若日志记录了有效电流，动态内阻仅作为趋势参考。"],
         "evidence": evidence,
         "series": [_series("单体电压", "V", ts, per_cell, log.start_timestamp)] + ([_series("电流", "A", ts, current_arr, log.start_timestamp)] if current_arr.size == ts.size else []),
+        "data_sources": [
+            _source("battery_status", "voltage_v", "电池包总电压", "V", "除以电池串数后计算单体电压变化。"),
+            _source("battery_status", "current_a", "电池电流", "A", "数据有效时用于估算动态内阻趋势。"),
+            _source("battery_status", "cell_count", "电池串数", "S", "用于把总电压换算为单体电压；异常时会明确标注推断值。"),
+            _source("battery_status", "warning / max_cell_voltage_delta", "电池告警/最大单体压差", "枚举 / V", "作为压降结论的附加严重度证据。"),
+        ],
         "parameters": _parameters(log, "battery"),
     }
 
@@ -380,6 +433,10 @@ def _attitude(log: ULog, start: int, end: int) -> dict[str, Any]:
         "details": ["这里使用实际姿态与设定姿态的四元数夹角，避免欧拉角跨越 ±180° 时产生假误差。", "首版以综合跟踪误差为主；曲线中的尖峰需结合设定值变化判断是否为超调。"],
         "evidence": [_evidence("姿态误差 P95", p95, "°"), _evidence("最大姿态误差", maximum, "°")],
         "series": [_series("三轴综合姿态误差", "°", at, error, log.start_timestamp)],
+        "data_sources": [
+            _source("vehicle_attitude", "q[0..3]", "飞行器实际姿态四元数", "无量纲", "作为姿态跟踪误差的实际值。"),
+            _source("vehicle_attitude_setpoint", "q_d[0..3]", "姿态控制器目标四元数", "无量纲", "与实际四元数对齐后计算三轴综合夹角。"),
+        ],
         "parameters": _parameters(log, "attitude"),
     }
 
@@ -421,6 +478,9 @@ def _motors(log: ULog, start: int, end: int) -> dict[str, Any]:
         "details": ["使用归一化电机输出判断，不使用姿态控制量代替电机输出。", "短暂满输出可能来自起飞或急动作；持续接近 1.0 更值得关注。"],
         "evidence": [_evidence("最大电机输出 P95", p95 * 100, "%"), _evidence("瞬时最大输出", maximum * 100, "%"), _evidence("≥95% 输出占比", saturation_fraction * 100, "%")],
         "series": [_series("各时刻最大电机输出", "%", ts, per_sample * 100, log.start_timestamp)],
+        "data_sources": [
+            _source("actuator_motors", "control[0..11]", "归一化电机输出命令", "-1～1", "取有效电机通道的逐时刻最大值，计算 P95、峰值和饱和占比。"),
+        ],
         "parameters": _parameters(log, "motors"),
     }
 

@@ -88,9 +88,10 @@ function renderResults(data) {
 
 function metricCard(metric, index) {
   const evidence = metric.evidence.length
-    ? `<div class="evidence-grid">${metric.evidence.map((item) => `<div class="evidence"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></div>`).join("")}</div>`
+    ? `<div class="evidence-grid">${metric.evidence.map((item) => `<div class="evidence ${escapeHtml(item.status || "")}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong>${item.result ? `<em>${escapeHtml(item.result)}</em>` : ""}</div>`).join("")}</div>`
     : "";
   const notes = metric.details.map((note) => `<p class="detail-note">${escapeHtml(note)}</p>`).join("");
+  const sources = sourceSection(metric.data_sources || []);
   const charts = metric.series.length ? `<div class="chart-grid">${metric.series.map(chart).join("")}</div>` : "";
   const params = parameterSection(metric.parameters);
   return `<article class="metric-card ${escapeHtml(metric.status)}">
@@ -101,8 +102,20 @@ function metricCard(metric, index) {
       <span class="metric-brief">${escapeHtml(metric.summary)}</span>
       <span class="chevron">⌄</span>
     </button>
-    <div class="metric-details">${evidence}${notes}${charts}${params}</div>
+    <div class="metric-details">${evidence}${sources}${notes}${charts}${params}</div>
   </article>`;
+}
+
+function sourceSection(sources) {
+  if (!sources.length) return "";
+  const rows = sources.map((source) => `<div class="source-row">
+    <span class="source-topic">${escapeHtml(source.topic)}</span>
+    <span class="source-dot">.</span>
+    <span class="source-field" tabindex="0">${escapeHtml(source.field)}
+      <span class="field-tooltip" role="tooltip"><strong>${escapeHtml(source.zh)}</strong><span>单位：${escapeHtml(source.unit || "无")}</span><span>${escapeHtml(source.usage)}</span></span>
+    </span>
+  </div>`).join("");
+  return `<section class="source-section"><h4>ULog 计算数据来源</h4><div class="source-list">${rows}</div><p>将鼠标放到字段名上可查看中文注解。</p></section>`;
 }
 
 function parameterSection(parameters) {

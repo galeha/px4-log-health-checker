@@ -95,6 +95,23 @@ class AnalysisRuleTests(unittest.TestCase):
         })])
         self.assertEqual(_vibration(log, 0, 10_000_000)["status"], "severe")
 
+    def test_vibration_rms_is_reported_per_axis(self):
+        t = timestamps(100)
+        x = np.tile([-10.0, 10.0], 50)
+        log = FakeLog([Dataset("sensor_combined", {
+            "timestamp": t,
+            "accelerometer_m_s2[0]": x,
+            "accelerometer_m_s2[1]": np.zeros(len(t)),
+            "accelerometer_m_s2[2]": np.zeros(len(t)),
+        })])
+        result = _vibration(log, 0, 10_000_000)
+        labels = [item["label"] for item in result["evidence"]]
+        self.assertEqual(result["status"], "severe")
+        self.assertIn("X 轴高频加速度 RMS", labels)
+        self.assertIn("Y 轴高频加速度 RMS", labels)
+        self.assertIn("Z 轴高频加速度 RMS", labels)
+        self.assertEqual(result["data_sources"][0]["field"], "accelerometer_m_s2[0..2]")
+
     def test_landed_log_has_no_flight_window(self):
         t = timestamps(4)
         log = FakeLog([
@@ -107,4 +124,3 @@ class AnalysisRuleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

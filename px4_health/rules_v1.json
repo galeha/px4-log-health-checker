@@ -1,8 +1,8 @@
 {
-  "version": "v1.0.0",
+  "version": "v1.1.0",
   "vibration": {
-    "accel_rms_warning_m_s2": 3.0,
-    "accel_rms_severe_m_s2": 6.0,
+    "accel_axis_rms_warning_m_s2": 3.0,
+    "accel_axis_rms_severe_m_s2": 6.0,
     "clip_warning_count": 1,
     "clip_severe_count": 100,
     "vibe_warning": [0.01, 0.01, 0.10],
@@ -41,4 +41,3 @@
     "saturation_fraction_severe": 0.05
   }
 }
-
