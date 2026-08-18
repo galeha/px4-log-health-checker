@@ -482,8 +482,10 @@ def _attitude(log: ULog, start: int, end: int) -> dict[str, Any]:
         "evidence": evidence,
         "series": series,
         "data_sources": [
-            _source("vehicle_attitude", "q[0..3]", "飞行器实际姿态四元数", "无量纲", "作为姿态跟踪误差的实际值。"),
-            _source("vehicle_attitude_setpoint", "q_d[0..3]", "姿态控制器目标四元数", "无量纲", "与实际四元数对齐后计算三轴综合夹角。"),
+            _source("vehicle_attitude.q / vehicle_attitude_setpoint.q_d", "roll / roll_sp（派生）", "实际/目标横滚角", "°", "实际横滚角由 q[0..3] 转换，目标横滚角由 q_d[0..3] 转换。"),
+            _source("vehicle_attitude.q / vehicle_attitude_setpoint.q_d", "pitch / pitch_sp（派生）", "实际/目标俯仰角", "°", "实际俯仰角由 q[0..3] 转换，目标俯仰角由 q_d[0..3] 转换。"),
+            _source("vehicle_attitude.q / vehicle_attitude_setpoint.q_d", "yaw / yaw_sp（派生）", "实际/目标偏航角", "°", "实际偏航角由 q[0..3] 转换，目标偏航角由 q_d[0..3] 转换，并处理 ±180° 显示跳变。"),
+            _source("vehicle_attitude / vehicle_attitude_setpoint", "q[0..3] / q_d[0..3]", "实际/目标姿态四元数", "无量纲", "直接计算不受欧拉角跳变影响的三轴综合姿态误差。"),
         ],
         "parameters": _parameters(log, "attitude"),
     }
@@ -523,8 +525,14 @@ def _motors(log: ULog, start: int, end: int) -> dict[str, Any]:
     return {
         "id": "motors", "name": "电机输出余量", "status": _status(rank), "label": labels[rank],
         "summary": f"按 P95 估算仍有 {margin:.1f}% 输出余量",
-        "details": ["使用归一化电机输出判断，不使用姿态控制量代替电机输出。", "短暂满输出可能来自起飞或急动作；持续接近 1.0 更值得关注。"],
-        "evidence": [_evidence("最大电机输出 P95", p95 * 100, "%"), _evidence("瞬时最大输出", maximum * 100, "%"), _evidence("≥95% 输出占比", saturation_fraction * 100, "%")],
+        "details": [
+            "使用归一化电机输出判断，不使用姿态控制量代替电机输出。",
+            "时刻最大电机输出：在每个采样时刻，对所有有效电机 control 通道取最大值。",
+            "时刻最大电机输出 P95：对上述时间序列取第 95 百分位，忽略最高 5% 的短暂尖峰，用于估算持续输出余量。",
+            "全程瞬时最大输出：上述时间序列在整个飞行阶段的最大值，容易受起飞或急动作的单次尖峰影响。",
+            "P95 达到 80% 判为接近饱和，达到 95% 判为高风险；输出不低于 95% 的时间占比达到 1%/5% 时也分别触发提醒/严重。",
+        ],
+        "evidence": [_evidence("时刻最大电机输出 P95", p95 * 100, "%"), _evidence("全程瞬时最大输出", maximum * 100, "%"), _evidence("≥95% 输出占比", saturation_fraction * 100, "%")],
         "series": [_series("各时刻最大电机输出", "%", ts, per_sample * 100, log.start_timestamp)],
         "data_sources": [
             _source("actuator_motors", "control[0..11]", "归一化电机输出命令", "-1～1", "取有效电机通道的逐时刻最大值，计算 P95、峰值和饱和占比。"),

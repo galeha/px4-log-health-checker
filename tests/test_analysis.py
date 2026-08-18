@@ -91,7 +91,11 @@ class AnalysisRuleTests(unittest.TestCase):
             "control[2]": np.full(len(t), 0.97),
             "control[3]": np.full(len(t), 0.99),
         })])
-        self.assertEqual(_motors(log, 0, 10_000_000)["status"], "severe")
+        result = _motors(log, 0, 10_000_000)
+        self.assertEqual(result["status"], "severe")
+        labels = [item["label"] for item in result["evidence"]]
+        self.assertIn("时刻最大电机输出 P95", labels)
+        self.assertIn("全程瞬时最大输出", labels)
 
     def test_accelerometer_clipping_is_severe(self):
         t = timestamps(2)
