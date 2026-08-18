@@ -11,11 +11,14 @@ from threading import Timer
 from urllib.parse import unquote
 
 from px4_health import AnalysisError, analyze_ulog
+from px4_health.explorer import LogSessionStore
 
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 MAX_UPLOAD = 512 * 1024 * 1024
+MAX_JSON_REQUEST = 1024 * 1024
+SESSIONS = LogSessionStore()
 
 
 class HealthHandler(SimpleHTTPRequestHandler):
@@ -40,9 +43,15 @@ class HealthHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
-        if self.path != "/api/analyze":
-            self._json({"error": "接口不存在。"}, HTTPStatus.NOT_FOUND)
+        if self.path == "/api/analyze":
+            self._analyze()
             return
+        if self.path == "/api/explorer-series":
+            self._explorer_series()
+            return
+        self._json({"error": "接口不存在。"}, HTTPStatus.NOT_FOUND)
+
+    def _analyze(self) -> None:
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -71,6 +80,8 @@ class HealthHandler(SimpleHTTPRequestHandler):
             if remaining:
                 raise AnalysisError("日志上传不完整。")
             result = analyze_ulog(temp_path, filename)
+            result["explorer"] = SESSIONS.create(temp_path)
+            temp_path = None  # The active explorer session now owns the file.
             self._json(result)
         except AnalysisError as exc:
             self._json({"error": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
@@ -82,6 +93,31 @@ class HealthHandler(SimpleHTTPRequestHandler):
                     os.unlink(temp_path)
                 except OSError:
                     pass
+
+    def _explorer_series(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_JSON_REQUEST:
+            self._json({"error": "曲线请求内容无效。"}, HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise AnalysisError("曲线请求格式无效。")
+            result = SESSIONS.query(
+                str(payload.get("session_id", "")),
+                payload.get("fields", []),
+                payload.get("start_s"),
+                payload.get("end_s"),
+                payload.get("max_points", 4000),
+            )
+            self._json(result)
+        except (AnalysisError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._json({"error": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+        except Exception as exc:
+            self._json({"error": f"读取曲线失败：{exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def log_message(self, format, *args):
         print(f"[{self.log_date_time_string()}] {format % args}")
@@ -102,6 +138,7 @@ def main() -> None:
         print("\n已停止。")
     finally:
         server.server_close()
+        SESSIONS.close()
 
 
 if __name__ == "__main__":

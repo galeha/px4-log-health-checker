@@ -67,6 +67,38 @@
 
       <div id="metaGrid" class="meta-grid"></div>
       <div id="metricGrid" class="metric-grid"></div>
+
+      <section id="logExplorer" class="log-explorer">
+        <div class="explorer-heading">
+          <div>
+            <p class="eyebrow">全部 ULog 数值数据</p>
+            <h3>日志曲线浏览器</h3>
+            <p>检索 topic 或字段，选择后按需读取曲线。滚轮缩放、拖动平移、双击复位。</p>
+          </div>
+          <span id="fieldCount" class="field-count"></span>
+        </div>
+        <div class="explorer-layout">
+          <aside class="field-browser">
+            <label class="field-search-label" for="fieldSearch">检索字段</label>
+            <input id="fieldSearch" class="field-search" type="search" placeholder="例如 attitude、control[0]" autocomplete="off">
+            <label class="target-label" for="plotTarget">新曲线添加至</label>
+            <select id="plotTarget" class="plot-target">
+              <option value="auto">自动分组</option>
+              <option value="new">新建图表</option>
+            </select>
+            <div id="topicTree" class="topic-tree" aria-label="ULog 字段列表"></div>
+          </aside>
+          <div class="explorer-workspace">
+            <div class="explorer-toolbar">
+              <span id="viewRange">请选择要显示的字段</span>
+              <button id="resetViewButton" type="button">复位时间范围</button>
+            </div>
+            <div id="selectedSeries" class="selected-series"></div>
+            <div id="explorerMessage" class="explorer-message">从左侧选择字段开始绘图，最多同时显示 12 条。</div>
+            <div id="explorerPlots" class="explorer-plots"></div>
+          </div>
+        </div>
+      </section>
       <p id="disclaimer" class="disclaimer"></p>
     </section>
   </main>
@@ -78,4 +110,3 @@
   <script src="/app.js"></script>
 </body>
 </html>
-

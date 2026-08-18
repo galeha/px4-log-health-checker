@@ -1,0 +1,118 @@
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import numpy as np
+
+from px4_health.analyzer import AnalysisError
+from px4_health.explorer import (
+    LogSessionStore,
+    build_catalog,
+    downsample_extrema,
+    field_unit,
+)
+
+
+class Dataset:
+    def __init__(self, name, data, multi_id=0, types=None):
+        self.name = name
+        self.multi_id = multi_id
+        self.data = {key: np.asarray(value) for key, value in data.items()}
+        types = types or {}
+        self.field_data = [
+            SimpleNamespace(field_name=key, type_str=types.get(key, str(value.dtype)))
+            for key, value in self.data.items()
+        ]
+
+
+class FakeLog:
+    def __init__(self, datasets):
+        self.data_list = datasets
+        self.start_timestamp = 1_000_000
+        self.last_timestamp = 11_000_000
+
+
+def sample_log():
+    timestamps = np.arange(1_000_000, 11_000_001, 100_000, dtype=np.int64)
+    return FakeLog([
+        Dataset("sensor_accel", {
+            "timestamp": timestamps,
+            "x": np.linspace(0, 1, len(timestamps)),
+            "temperature": np.linspace(20, 25, len(timestamps)),
+        }, multi_id=0),
+        Dataset("sensor_accel", {
+            "timestamp": timestamps,
+            "x": np.linspace(1, 2, len(timestamps)),
+        }, multi_id=1),
+    ])
+
+
+class ExplorerTests(unittest.TestCase):
+    def test_catalog_keeps_instances_and_excludes_timestamp(self):
+        topics, lookup = build_catalog(sample_log())
+        self.assertEqual([(item["name"], item["multi_id"]) for item in topics], [
+            ("sensor_accel", 0), ("sensor_accel", 1),
+        ])
+        self.assertIn("sensor_accel[0].x", lookup)
+        self.assertIn("sensor_accel[1].x", lookup)
+        self.assertFalse(any(field["name"] == "timestamp" for topic in topics for field in topic["fields"]))
+
+    def test_extrema_downsampling_retains_spike(self):
+        timestamps = np.arange(20_000)
+        values = np.zeros(20_000)
+        values[12_345] = 999.0
+        sampled_t, sampled_v = downsample_extrema(timestamps, values, 400)
+        self.assertLessEqual(len(sampled_v), 400)
+        self.assertIn(999.0, sampled_v)
+        self.assertEqual(sampled_t[np.argmax(sampled_v)], 12_345)
+
+    def test_known_unit_is_conservative(self):
+        self.assertEqual(field_unit("battery_status", "voltage_v"), "V")
+        self.assertEqual(field_unit("custom_topic", "mystery"), "")
+
+    def test_store_queries_range_and_limits_fields(self):
+        log = sample_log()
+        with tempfile.NamedTemporaryFile(suffix=".ulg", delete=False) as handle:
+            path = Path(handle.name)
+        store = LogSessionStore()
+        try:
+            with patch("px4_health.explorer.ULog", return_value=log):
+                catalog = store.create(path)
+            result = store.query(
+                catalog["session_id"], ["sensor_accel[1].x"], 2.0, 4.0, 200
+            )
+            self.assertEqual(len(result["series"]), 1)
+            self.assertTrue(all(2.0 <= point[0] <= 4.0 for point in result["series"][0]["points"]))
+            with self.assertRaises(AnalysisError):
+                store.query(catalog["session_id"], ["missing[0].x"], 0, 1)
+            with self.assertRaises(AnalysisError):
+                store.query("expired-session", ["sensor_accel[0].x"], 0, 1)
+            with self.assertRaises(AnalysisError):
+                store.query(catalog["session_id"], ["sensor_accel[0].x"] * 13, 0, 1)
+        finally:
+            store.close()
+            if path.exists():
+                path.unlink()
+
+    def test_new_session_removes_previous_temp_file(self):
+        store = LogSessionStore()
+        paths = []
+        try:
+            with patch("px4_health.explorer.ULog", return_value=sample_log()):
+                for _ in range(2):
+                    with tempfile.NamedTemporaryFile(suffix=".ulg", delete=False) as handle:
+                        paths.append(Path(handle.name))
+                    store.create(paths[-1])
+            self.assertFalse(paths[0].exists())
+            self.assertTrue(paths[1].exists())
+        finally:
+            store.close()
+            for path in paths:
+                if path.exists():
+                    path.unlink()
+
+
+if __name__ == "__main__":
+    unittest.main()
