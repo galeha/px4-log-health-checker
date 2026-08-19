@@ -221,6 +221,7 @@ function initExplorer(catalog) {
     data: new Map(),
     hidden: new Set(),
     canvases: new Map(),
+    topicOpen: new Map(),
     fullStart: Number(catalog.start_s) || 0,
     fullEnd: Number(catalog.end_s) || 1,
     viewStart: Number(catalog.start_s) || 0,
@@ -234,7 +235,10 @@ function initExplorer(catalog) {
   panel.classList.remove("hidden");
   $("#fieldCount").textContent = `${catalog.topics.length} 个 topic · ${catalog.field_count} 个字段`;
   $("#fieldSearch").value = "";
-  $("#fieldSearch").oninput = renderFieldTree;
+  $("#fieldSearch").oninput = () => {
+    explorerState.topicOpen.clear();
+    renderFieldTree();
+  };
   $("#topicTree").onclick = handleFieldClick;
   $("#selectedSeries").onchange = handleSeriesMove;
   $("#selectedSeries").onclick = handleSeriesRemove;
@@ -246,6 +250,8 @@ function initExplorer(catalog) {
 
 function renderFieldTree() {
   if (!explorerState) return;
+  const tree = $("#topicTree");
+  const scrollTop = tree.scrollTop;
   const query = $("#fieldSearch").value.trim().toLowerCase();
   const groups = explorerState.catalog.topics.map((topic) => {
     const topicLabel = `${topic.name}[${topic.multi_id}]`;
@@ -259,9 +265,16 @@ function renderFieldTree() {
         <small>${escapeHtml(field.type)} · ${escapeHtml(field.unit || "单位未知")}</small>
       </button>`;
     }).join("");
-    return `<details class="topic-group" ${query ? "open" : ""}><summary><span>${escapeHtml(topicLabel)}</span><em>${fields.length}</em></summary>${rows}</details>`;
+    const open = explorerState.topicOpen.has(topicLabel)
+      ? explorerState.topicOpen.get(topicLabel)
+      : Boolean(query);
+    return `<details class="topic-group" data-topic-key="${escapeHtml(topicLabel)}" ${open ? "open" : ""}><summary><span>${escapeHtml(topicLabel)}</span><em>${fields.length}</em></summary>${rows}</details>`;
   }).join("");
-  $("#topicTree").innerHTML = groups || `<p class="no-fields">没有匹配的字段。</p>`;
+  tree.innerHTML = groups || `<p class="no-fields">没有匹配的字段。</p>`;
+  tree.querySelectorAll(".topic-group").forEach((details) => {
+    details.ontoggle = () => explorerState.topicOpen.set(details.dataset.topicKey, details.open);
+  });
+  tree.scrollTop = scrollTop;
 }
 
 function handleFieldClick(event) {
