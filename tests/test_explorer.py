@@ -70,6 +70,12 @@ class ExplorerTests(unittest.TestCase):
 
     def test_known_unit_is_conservative(self):
         self.assertEqual(field_unit("battery_status", "voltage_v"), "V")
+        self.assertEqual(field_unit("sensor_accel", "x"), "m/s²")
+        self.assertEqual(field_unit("sensor_accel", "y"), "m/s²")
+        self.assertEqual(field_unit("sensor_accel", "z"), "m/s²")
+        self.assertEqual(field_unit("sensor_accel", "temperature"), "°C")
+        self.assertEqual(field_unit("sensor_accel", "clip_counter[0]"), "次")
+        self.assertEqual(field_unit("sensor_accel", "clip_counter[2]"), "次")
         self.assertEqual(field_unit("custom_topic", "mystery"), "")
 
     def test_store_queries_range_and_limits_fields(self):

@@ -284,6 +284,10 @@ function handleFieldClick(event) {
   } else if (target === "auto" && field.unit) {
     plotId = `unit:${field.unit}`;
     ensurePlot(plotId, `${field.unit} 数据`, field.unit);
+  } else if (target === "auto" && /\[\d+\]$/.test(field.name)) {
+    const family = field.name.replace(/\[\d+\]$/, "[*]");
+    plotId = `family:${field.topic}[${field.multiId}].${family}`;
+    ensurePlot(plotId, `${field.topic}.${family}`, "");
   } else {
     plotId = createCustomPlot(field.unit, target === "new" ? "自定义图表" : `${field.topic}.${field.name}`);
   }
@@ -294,15 +298,20 @@ function handleFieldClick(event) {
 }
 
 function ensurePlot(id, title, unit = "") {
-  if (!explorerState.plots.has(id)) explorerState.plots.set(id, {id, title, unit, legendVisible: true});
+  if (!explorerState.plots.has(id)) explorerState.plots.set(id, {
+    id, title, unit, legendVisible: true, number: explorerState.plotCounter++,
+  });
   return id;
 }
 
 function createCustomPlot(unit = "", preferredTitle = "自定义图表") {
-  const number = explorerState.plotCounter++;
-  const id = `custom:${number}`;
-  ensurePlot(id, preferredTitle === "自定义图表" ? `自定义图表 ${number}` : preferredTitle, unit);
+  const id = `custom:${explorerState.plotCounter}`;
+  ensurePlot(id, preferredTitle, unit);
   return id;
+}
+
+function plotDisplayName(plot) {
+  return `图表 ${plot.number} · ${plot.title}`;
 }
 
 function removeExplorerField(key) {
@@ -323,14 +332,16 @@ function removeEmptyPlots() {
 
 function renderExplorerSelection() {
   if (!explorerState) return;
-  const plotOptions = [...explorerState.plots.values()].map((plot) => `<option value="${escapeHtml(plot.id)}">${escapeHtml(plot.title)}</option>`).join("");
-  $("#plotTarget").innerHTML = `<option value="auto">自动分组</option><option value="new">新建图表</option>${plotOptions}`;
+  const currentTarget = $("#plotTarget").value;
+  const plotOptions = [...explorerState.plots.values()].map((plot) => `<option value="${escapeHtml(plot.id)}">${escapeHtml(plotDisplayName(plot))}</option>`).join("");
+  $("#plotTarget").innerHTML = `<option value="auto">自动分组（推荐）</option><option value="new">单独新建图表</option>${plotOptions}`;
+  if ([...$("#plotTarget").options].some((option) => option.value === currentTarget)) $("#plotTarget").value = currentTarget;
   const chips = [...explorerState.selected.values()].map((field) => `<div class="series-chip">
     <span><i style="background:${seriesColor(field.key)}"></i><code>${escapeHtml(field.key)}</code></span>
-    <select data-move-field="${escapeHtml(field.key)}" aria-label="移动曲线到其他图表">
-      ${[...explorerState.plots.values()].map((plot) => `<option value="${escapeHtml(plot.id)}" ${plot.id === field.plotId ? "selected" : ""}>${escapeHtml(plot.title)}</option>`).join("")}
-      <option value="__new">＋ 新建图表</option>
-    </select>
+    <label class="series-plot-choice"><span>所在图表</span><select data-move-field="${escapeHtml(field.key)}" aria-label="移动曲线到其他图表">
+        ${[...explorerState.plots.values()].map((plot) => `<option value="${escapeHtml(plot.id)}" ${plot.id === field.plotId ? "selected" : ""}>${escapeHtml(plotDisplayName(plot))}</option>`).join("")}
+        <option value="__new">＋ 新建图表</option>
+      </select></label>
     <button type="button" data-remove-field="${escapeHtml(field.key)}" aria-label="移除曲线">×</button>
   </div>`).join("");
   $("#selectedSeries").innerHTML = chips;
@@ -409,9 +420,12 @@ function renderExplorerPlots() {
   }
   $("#explorerPlots").innerHTML = [...groups].map(([plotId, fields]) => {
     const plot = explorerState.plots.get(plotId);
-    const legend = fields.map((field) => `<span><i style="background:${seriesColor(field.key)}"></i><code>${escapeHtml(field.key)}</code><button type="button" data-remove-field="${escapeHtml(field.key)}" title="移除曲线">×</button></span>`).join("");
+    const legend = fields.map((field) => {
+      const hidden = explorerState.hidden.has(field.key);
+      return `<span class="${hidden ? "curve-hidden" : ""}" data-toggle-series="${escapeHtml(field.key)}" title="点击${hidden ? "显示" : "隐藏"}这条曲线"><i style="background:${seriesColor(field.key)}"></i><code>${escapeHtml(field.key)}</code><button type="button" data-remove-field="${escapeHtml(field.key)}" title="移除曲线">×</button></span>`;
+    }).join("");
     return `<article class="explorer-plot" data-plot-id="${escapeHtml(plotId)}">
-      <header><div><h4>${escapeHtml(plot.title)}</h4><small>${escapeHtml(plot.unit || "单位未知 / 自定义组合")}</small></div>
+      <header><div><h4>${escapeHtml(plotDisplayName(plot))}</h4><small>${escapeHtml(plot.unit || "单位未知 / 自定义组合")}</small></div>
         <button type="button" data-toggle-legend="${escapeHtml(plotId)}">${plot.legendVisible ? "隐藏图例" : "显示图例"}</button></header>
       <div class="explorer-legend${plot.legendVisible ? "" : " hidden"}">${legend}</div>
       <div class="canvas-wrap"><canvas aria-label="${escapeHtml(plot.title)}曲线"></canvas></div>
@@ -433,6 +447,14 @@ function handlePlotAction(event) {
   const remove = event.target.closest("[data-remove-field]");
   if (remove) {
     removeExplorerField(remove.dataset.removeField);
+    return;
+  }
+  const series = event.target.closest("[data-toggle-series]");
+  if (series) {
+    const key = series.dataset.toggleSeries;
+    if (explorerState.hidden.has(key)) explorerState.hidden.delete(key);
+    else explorerState.hidden.add(key);
+    renderExplorerPlots();
     return;
   }
   const toggle = event.target.closest("[data-toggle-legend]");
@@ -539,7 +561,9 @@ function drawExplorerPlot({canvas, card, fields}) {
   const margin = {left: 54, right: 18, top: 16, bottom: 30};
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const visibleLines = fields.map((field) => explorerState.data.get(field.key)).filter(Boolean);
+  const visibleLines = fields
+    .filter((field) => !explorerState.hidden.has(field.key))
+    .map((field) => explorerState.data.get(field.key)).filter(Boolean);
   const points = visibleLines.flatMap((line) => line.points.filter((point) => point[0] >= explorerState.viewStart && point[0] <= explorerState.viewEnd));
   let minY = points.length ? Math.min(...points.map((point) => point[1])) : -1;
   let maxY = points.length ? Math.max(...points.map((point) => point[1])) : 1;

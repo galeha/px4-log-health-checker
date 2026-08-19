@@ -20,6 +20,11 @@ MAX_POINTS = 4000
 
 
 _EXACT_UNITS = {
+    ("sensor_accel", "x"): "m/s²",
+    ("sensor_accel", "y"): "m/s²",
+    ("sensor_accel", "z"): "m/s²",
+    ("sensor_accel", "temperature"): "°C",
+    ("sensor_accel", "timestamp_sample"): "µs",
     ("sensor_gps", "eph"): "m",
     ("sensor_gps", "epv"): "m",
     ("vehicle_gps_position", "eph"): "m",
@@ -36,6 +41,8 @@ def field_unit(topic: str, field: str) -> str:
     if exact:
         return exact
     base = field.split("[")[0]
+    if base.endswith("_counter") or base.endswith("_count") or base in {"samples", "error_count"}:
+        return "次"
     suffixes = (
         ("_m_s2", "m/s²"), ("_rad_s", "rad/s"), ("_deg_s", "°/s"),
         ("_us", "µs"), ("_ms", "ms"), ("_hz", "Hz"),

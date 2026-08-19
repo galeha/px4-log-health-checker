@@ -81,11 +81,12 @@
           <aside class="field-browser">
             <label class="field-search-label" for="fieldSearch">检索字段</label>
             <input id="fieldSearch" class="field-search" type="search" placeholder="例如 attitude、control[0]" autocomplete="off">
-            <label class="target-label" for="plotTarget">新曲线添加至</label>
+            <label class="target-label" for="plotTarget">新选字段的分组方式</label>
             <select id="plotTarget" class="plot-target">
-              <option value="auto">自动分组</option>
-              <option value="new">新建图表</option>
+              <option value="auto">自动分组（推荐）</option>
+              <option value="new">单独新建图表</option>
             </select>
+            <p class="target-help">这里控制之后新选的字段；已选曲线可用右侧“所在图表”移动。</p>
             <div id="topicTree" class="topic-tree" aria-label="ULog 字段列表"></div>
           </aside>
           <div class="explorer-workspace">
