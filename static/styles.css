@@ -127,6 +127,29 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(34px, 4.8vw, 58px); line-heig
 .evidence.normal em { color: var(--green); background: var(--green-soft); }
 .evidence.warning em { color: var(--amber); background: var(--amber-soft); }
 .evidence.severe em { color: var(--red); background: var(--red-soft); }
+.explainability-section { margin: 12px 0 18px; padding: 16px; border: 1px solid #dce7e3; border-radius: 14px; background: #fbfdfc; }
+.explainability-section > h4 { margin: 0 0 12px; font-size: 13px; }
+.quality-grid, .candidate-evidence { display: flex; flex-wrap: wrap; gap: 8px; }
+.quality-grid > span, .candidate-evidence > span { min-width: 130px; padding: 9px 11px; border-radius: 9px; background: #eef4f2; }
+.quality-grid small, .candidate-evidence small { display: block; color: var(--muted); font-size: 9px; }
+.quality-grid strong, .candidate-evidence strong { display: block; margin-top: 3px; overflow-wrap: anywhere; color: #345047; font-size: 11px; }
+.rule-hit-list, .quality-notes, .anomaly-windows { margin-top: 12px; color: #53635e; font-size: 11px; }
+.rule-hit-list > strong, .quality-notes > strong, .anomaly-windows > strong { display: block; margin-bottom: 6px; color: #334a43; }
+.rule-hit-list ul, .quality-notes ul, .candidate-hits { margin: 0; padding-left: 18px; line-height: 1.65; }
+.anomaly-windows > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.anomaly-jump { padding: 6px 8px; border: 1px solid #e2b766; border-radius: 8px; color: #805814; background: #fff8e8; font-size: 9px; }
+.anomaly-jump.severe { border-color: #e49a9a; color: #9b3434; background: #fff0f0; }
+.candidate-section { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #ccd9d5; }
+.candidate-section summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; color: #315148; font-size: 11px; font-weight: 750; }
+.candidate-section summary small { color: #7a8884; font-size: 9px; font-weight: 400; }
+.candidate-section > p { margin: 10px 0 0; color: #71807c; font-size: 10px; }
+.candidate-status { padding: 3px 7px; border-radius: 99px; font-size: 9px; font-style: normal; }
+.candidate-status.normal { color: var(--green); background: var(--green-soft); }
+.candidate-status.warning { color: var(--amber); background: var(--amber-soft); }
+.candidate-status.severe { color: var(--red); background: var(--red-soft); }
+.candidate-status.unavailable { color: var(--gray); background: var(--gray-soft); }
+.candidate-hits { margin-top: 10px; color: #56655f; font-size: 10px; }
+.candidate-evidence { margin-top: 10px; }
 .stat-term { position: relative; display: inline-block; color: #48625b; font-weight: 750; outline: none; cursor: help; border-bottom: 1px dashed #78a096; }
 .stat-term sup { display: inline-grid; place-items: center; width: 12px; height: 12px; margin-left: 2px; border-radius: 50%; color: #fff; background: #75958d; font-size: 8px; font-style: normal; line-height: 1; }
 .stat-tooltip { position: absolute; z-index: 25; left: 50%; bottom: calc(100% + 10px); width: 280px; padding: 12px 13px; border-radius: 11px; color: #edf8f4; background: #183e35; box-shadow: 0 12px 30px rgba(21,52,45,.22); font-size: 12px; font-weight: 400; line-height: 1.65; opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, 5px); transition: opacity .16s, transform .16s, visibility .16s; }

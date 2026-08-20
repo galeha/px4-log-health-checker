@@ -23,6 +23,10 @@ build/
 *.csv
 reports/
 analysis-output/
+validation-data/
+validation/results/
+validation/manifest.local.json
+validation/downloaded_manifest.json
 
 # IDE and operating-system files
 .vscode/

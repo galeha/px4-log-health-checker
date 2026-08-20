@@ -74,7 +74,7 @@ function renderResults(data) {
     ["机型（目前只分析多旋翼）", data.meta.vehicle_type],
     ["日志时长", `${data.meta.duration_s} 秒`],
     ["分析时段", `${data.meta.flight_duration_s} 秒`],
-    ["规则版本", data.meta.rule_version],
+    ["规则 / 算法", `${data.meta.rule_version} / ${data.meta.algorithm_version || "v1"}`],
   ];
   $("#metaGrid").innerHTML = meta.map(([label, value]) =>
     `<div class="meta-item"><span>${escapeHtml(label)}</span><div class="meta-value"><strong>${escapeHtml(value)}</strong></div></div>`
@@ -84,6 +84,7 @@ function renderResults(data) {
     button.closest(".metric-card").classList.toggle("open");
   }));
   initExplorer(data.explorer);
+  document.querySelectorAll("[data-anomaly-start]").forEach((button) => button.addEventListener("click", jumpToAnomaly));
   showOnly(results);
   results.scrollIntoView({behavior: "smooth", block: "start"});
 }
@@ -121,6 +122,7 @@ function metricCard(metric, index) {
     : "";
   const notes = detailHelp(metric.details || []);
   const sources = sourceSection(metric.data_sources || []);
+  const explainability = explainabilitySection(metric);
   const charts = metric.series.length ? `<div class="chart-grid">${metric.series.map(chart).join("")}</div>` : "";
   const params = parameterSection(metric.parameters);
   return `<article class="metric-card ${escapeHtml(metric.status)}">
@@ -131,8 +133,52 @@ function metricCard(metric, index) {
       <span class="metric-brief">${escapeHtml(metric.summary)}</span>
       <span class="chevron">⌄</span>
     </button>
-    <div class="metric-details">${evidence}${sources}${notes}${charts}${params}</div>
+    <div class="metric-details">${evidence}${explainability}${sources}${notes}${charts}${params}</div>
   </article>`;
+}
+
+function explainabilitySection(metric) {
+  const quality = metric.data_quality || {};
+  const qualityItems = [];
+  if (quality.coverage_percent !== undefined) qualityItems.push(["有效覆盖率", `${quality.coverage_percent}%`]);
+  if (quality.sample_rate_hz !== undefined && quality.sample_rate_hz !== null) qualityItems.push(["采样率", `${quality.sample_rate_hz} Hz`]);
+  if (quality.source) qualityItems.push(["候选算法数据源", quality.source]);
+  const qualityHtml = qualityItems.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`).join("");
+  const notes = (quality.notes || []).map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+  const hits = (metric.rule_hits || []).map((hit) => `<li>${escapeHtml(hit)}</li>`).join("");
+  const windows = (metric.anomaly_windows || []).map((window) => `<button class="anomaly-jump ${escapeHtml(window.severity || "warning")}" type="button" data-anomaly-start="${escapeHtml(window.start_s)}" data-anomaly-end="${escapeHtml(window.end_s)}">${escapeHtml(window.label)} · ${escapeHtml(window.start_s)}–${escapeHtml(window.end_s)} s</button>`).join("");
+  const candidate = candidateSection(metric.candidate_v2);
+  return `<section class="explainability-section">
+    <h4>结论可追溯信息</h4>
+    ${qualityHtml ? `<div class="quality-grid">${qualityHtml}</div>` : ""}
+    ${hits ? `<div class="rule-hit-list"><strong>当前 v1 规则</strong><ul>${hits}</ul></div>` : ""}
+    ${notes ? `<div class="quality-notes"><strong>数据限制</strong><ul>${notes}</ul></div>` : ""}
+    ${windows ? `<div class="anomaly-windows"><strong>候选算法发现的异常时间段</strong><div>${windows}</div></div>` : ""}
+    ${candidate}
+  </section>`;
+}
+
+function candidateSection(candidate) {
+  if (!candidate) return "";
+  const evidence = (candidate.evidence || []).map((item) => `<span><small>${escapeHtml(item.label)}</small><strong>${item.value === null || item.value === undefined ? "不可用" : `${escapeHtml(item.value)} ${escapeHtml(item.unit || "")}`}</strong></span>`).join("");
+  const hits = (candidate.rule_hits || []).map((hit) => `<li>${escapeHtml(hit)}</li>`).join("");
+  return `<details class="candidate-section">
+    <summary><span>候选 v2 影子结果</span><em class="candidate-status ${escapeHtml(candidate.status)}">${escapeHtml(candidate.label)}</em><small>${escapeHtml(candidate.algorithm_version)} · 实验性，不影响总评</small></summary>
+    ${hits ? `<ul class="candidate-hits">${hits}</ul>` : `<p>未触发候选 v2 的提醒或严重条件。</p>`}
+    ${evidence ? `<div class="candidate-evidence">${evidence}</div>` : ""}
+  </details>`;
+}
+
+function jumpToAnomaly(event) {
+  if (!explorerState) return;
+  const start = Number(event.currentTarget.dataset.anomalyStart);
+  const end = Number(event.currentTarget.dataset.anomalyEnd);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+  const margin = Math.max(.5, (end - start) * .2);
+  setExplorerRange(start - margin, end + margin);
+  $("#logExplorer").scrollIntoView({behavior: "smooth", block: "start"});
+  if (explorerState.selected.size) queueSeriesLoad(0);
+  else showExplorerMessage(`已定位到 ${formatNumber(explorerState.viewStart)}–${formatNumber(explorerState.viewEnd)} s，请从左侧选择要查看的字段。`);
 }
 
 function detailHelp(details) {

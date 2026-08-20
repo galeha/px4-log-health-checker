@@ -16,6 +16,7 @@ GLOSSARY = json.loads((PACKAGE_DIR / "parameter_glossary.json").read_text(encodi
 TOPICS = [
     "actuator_motors",
     "battery_status",
+    "control_allocator_status",
     "estimator_status",
     "estimator_status_flags",
     "sensor_accel",
@@ -582,6 +583,19 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
             metrics.append(function(log, start, end))
         except Exception as exc:
             metrics.append(_unavailable(metric_id, name, f"该项计算失败：{exc}", log))
+    from .candidate_v2 import RULES as CANDIDATE_RULES, analyze_candidate_v2
+    candidate_metrics = analyze_candidate_v2(log, start, end, metrics, has_flight)
+    for metric in metrics:
+        candidate = candidate_metrics.get(metric["id"])
+        metric["candidate_v2"] = candidate
+        if metric["status"] == "unavailable":
+            metric["rule_hits"] = []
+        elif metric["status"] == "normal":
+            metric["rule_hits"] = ["未触发 v1.2.0 的提醒或严重阈值。"]
+        else:
+            metric["rule_hits"] = [metric["summary"]]
+        metric["data_quality"] = candidate.get("data_quality", {}) if candidate else {}
+        metric["anomaly_windows"] = candidate.get("anomaly_windows", []) if candidate else []
     status_rank = {"normal": 0, "unavailable": 0, "warning": 1, "severe": 2}
     overall_rank = max((status_rank[item["status"]] for item in metrics), default=0)
     unavailable_count = sum(item["status"] == "unavailable" for item in metrics)
@@ -604,6 +618,8 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
             "px4_version": str(log.msg_info_dict.get("ver_sw", "未记录")),
             "scope": scope,
             "rule_version": RULES["version"],
+            "algorithm_version": "v1.0.0",
+            "candidate_algorithm_version": CANDIDATE_RULES["version"],
         },
         "overall": overall,
         "metrics": metrics,

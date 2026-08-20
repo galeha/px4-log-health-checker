@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "description": "PX4 多旋翼健康规则人工复核清单示例",
+  "label_policy": "飞手或维护结论，并由 PX4 告警、传感器状态和曲线证据交叉确认",
+  "entries": [
+    {
+      "id": "example-log-id",
+      "path": "../validation-data/example.ulg",
+      "sha256": "填写日志 SHA256",
+      "source": "user-local 或 px4-flight-review-public",
+      "source_url": "",
+      "license": "private 或 CC-BY PX4",
+      "px4_version": "",
+      "vehicle_type": "多旋翼",
+      "review_status": "pending",
+      "reviewer": "",
+      "known_conditions": [],
+      "labels": {
+        "vibration": "unknown",
+        "gps": "unknown",
+        "battery": "unknown",
+        "attitude": "unknown",
+        "motors": "unknown"
+      },
+      "evidence_notes": ""
+    }
+  ]
+}
