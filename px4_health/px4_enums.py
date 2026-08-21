@@ -75,7 +75,7 @@ FIELD_ENUMS = {
         "0 表示没有启用失效保护，1 表示已经启用失效保护。",
     ),
     ("estimator_status", "filter_fault_flags"): (
-        "EKF 内部故障位掩码", FILTER_FAULT_FLAGS, FILTER_FAULT_NOTE,
+        "EKF 内部故障位掩码", FILTER_FAULT_FLAGS, FILTER_FAULT_NOTE, "bitmask",
     ),
 }
 
@@ -89,12 +89,19 @@ def field_enum(topic: str, field: str) -> dict[str, Any] | None:
     metadata = FIELD_ENUMS.get((topic, field))
     if not metadata:
         return None
-    title, mapping, note = metadata
+    title, mapping, note, *options = metadata
+    kind = options[0] if options else "enum"
     return {
         "title": title,
         "note": note,
+        "kind": kind,
         "values": [
-            {"value": value, "label": label, "code": code}
+            {
+                "value": value,
+                "label": label,
+                "code": code,
+                "derived_name": code.rsplit("·", 1)[-1].strip() if kind == "bitmask" and value else "",
+            }
             for value, (label, code) in sorted(mapping.items())
         ],
     }

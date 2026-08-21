@@ -307,6 +307,7 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(34px, 4.8vw, 58px); line-heig
 .plot-readout { min-height: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px 13px; padding: 6px 8px; color: #6e7d78; background: #f5f8f7; border-radius: 7px; font-size: 9px; }
 .plot-readout b { color: #344e46; }
 .plot-readout span { display: inline-flex; align-items: center; gap: 4px; }
+.plot-readout em { color: #276856; font-style: normal; }
 .disclaimer { margin: 20px 0 0; padding: 15px 17px; color: #6f5b35; background: #fff7e8; border-radius: 12px; font-size: 12px; line-height: 1.7; }
 
 footer { max-width: 1180px; margin: auto; padding: 24px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; color: #7a8582; font-size: 12px; }

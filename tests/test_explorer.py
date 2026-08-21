@@ -111,6 +111,33 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(meanings[1024], "垂直加速度数据异常")
         self.assertEqual(meanings[2048], "加速度数据削波或非对称触顶")
         self.assertIn("3072 = 1024 + 2048", field["enum_note"])
+        derived = {item["name"] for item in topics[0]["fields"] if item.get("derived")}
+        self.assertIn("filter_fault_flags.bad_acc_vertical", derived)
+        self.assertIn("filter_fault_flags.bad_acc_clipping", derived)
+
+    def test_filter_fault_derived_curves_decode_each_active_bit(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("estimator_status", {
+            "timestamp": timestamps,
+            "filter_fault_flags": [0, 1024, 3072],
+        })])
+        with tempfile.NamedTemporaryFile(suffix=".ulg", delete=False) as handle:
+            path = Path(handle.name)
+        store = LogSessionStore()
+        try:
+            with patch("px4_health.explorer.ULog", return_value=log):
+                catalog = store.create(path)
+            result = store.query(catalog["session_id"], [
+                "estimator_status[0].filter_fault_flags.bad_acc_vertical",
+                "estimator_status[0].filter_fault_flags.bad_acc_clipping",
+            ], 0, 10, 200)
+            values = {series["name"]: [point[1] for point in series["points"]] for series in result["series"]}
+            self.assertEqual(values["filter_fault_flags.bad_acc_vertical"], [0.0, 1.0, 1.0])
+            self.assertEqual(values["filter_fault_flags.bad_acc_clipping"], [0.0, 0.0, 1.0])
+        finally:
+            store.close()
+            if path.exists():
+                path.unlink()
 
     def test_store_queries_range_and_limits_fields(self):
         log = sample_log()

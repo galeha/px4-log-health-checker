@@ -67,9 +67,18 @@ def _is_curve_field(values: Any, timestamps: np.ndarray, field: str) -> bool:
     )
 
 
-def build_catalog(log: ULog) -> tuple[list[dict[str, Any]], dict[str, tuple[Any, str]]]:
+@dataclass(frozen=True)
+class _CurveSpec:
+    dataset: Any
+    source_field: str
+    display_name: str
+    unit: str
+    bit_mask: int | None = None
+
+
+def build_catalog(log: ULog) -> tuple[list[dict[str, Any]], dict[str, _CurveSpec]]:
     topics: list[dict[str, Any]] = []
-    lookup: dict[str, tuple[Any, str]] = {}
+    lookup: dict[str, _CurveSpec] = {}
     datasets = sorted(log.data_list, key=lambda item: (item.name.lower(), item.multi_id))
     for dataset in datasets:
         timestamps = np.asarray(dataset.data.get("timestamp", []))
@@ -95,9 +104,33 @@ def build_catalog(log: ULog) -> tuple[list[dict[str, Any]], dict[str, tuple[Any,
             if enum_metadata:
                 field["enum_title"] = enum_metadata["title"]
                 field["enum_note"] = enum_metadata["note"]
+                field["enum_kind"] = enum_metadata["kind"]
                 field["enum_values"] = enum_metadata["values"]
             fields.append(field)
-            lookup[key] = (dataset, name)
+            lookup[key] = _CurveSpec(dataset, name, name, unit)
+            if enum_metadata and enum_metadata["kind"] == "bitmask":
+                for item in enum_metadata["values"]:
+                    if not item["value"] or not item["derived_name"]:
+                        continue
+                    derived_name = f"{name}.{item['derived_name']}"
+                    derived_key = f"{dataset.name}[{dataset.multi_id}].{derived_name}"
+                    fields.append({
+                        "key": derived_key,
+                        "name": derived_name,
+                        "type": "bool（派生）",
+                        "unit": "状态（0/1）",
+                        "derived": True,
+                        "enum_title": item["label"],
+                        "enum_note": f"从 {name} 的 {item['code']} 按位解码；0 表示未触发，1 表示故障存在。",
+                        "enum_kind": "enum",
+                        "enum_values": [
+                            {"value": 0, "label": "未触发", "code": "false"},
+                            {"value": 1, "label": "故障存在", "code": "true"},
+                        ],
+                    })
+                    lookup[derived_key] = _CurveSpec(
+                        dataset, name, derived_name, "状态（0/1）", int(item["value"]),
+                    )
         if fields:
             topics.append({"name": dataset.name, "multi_id": dataset.multi_id, "fields": fields})
     return topics, lookup
@@ -130,7 +163,7 @@ class _Session:
     session_id: str
     path: Path
     log: ULog
-    lookup: dict[str, tuple[Any, str]]
+    lookup: dict[str, _CurveSpec]
     created_at: float
 
 
@@ -197,9 +230,12 @@ class LogSessionStore:
 
         result = []
         for key in field_keys:
-            dataset, field = session.lookup[key]
+            spec = session.lookup[key]
+            dataset = spec.dataset
             timestamps = np.asarray(dataset.data["timestamp"], dtype=np.int64)
-            values = np.asarray(dataset.data[field])
+            values = np.asarray(dataset.data[spec.source_field])
+            if spec.bit_mask is not None:
+                values = (values.astype(np.uint64, copy=False) & np.uint64(spec.bit_mask)) != 0
             mask = (timestamps >= low) & (timestamps <= high)
             timestamps, values = timestamps[mask], values[mask]
             if not len(values):
@@ -216,10 +252,10 @@ class LogSessionStore:
             topic = dataset.name
             result.append({
                 "key": key,
-                "name": field,
+                "name": spec.display_name,
                 "topic": topic,
                 "multi_id": dataset.multi_id,
-                "unit": field_unit(topic, field),
+                "unit": spec.unit,
                 "points": points,
             })
         return {

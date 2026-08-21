@@ -761,7 +761,10 @@ function drawExplorerPlot({canvas, card, fields}) {
   const plotHeight = height - margin.top - margin.bottom;
   const visibleLines = fields
     .filter((field) => !explorerState.hidden.has(field.key))
-    .map((field) => explorerState.data.get(field.key)).filter(Boolean);
+    .map((field) => {
+      const line = explorerState.data.get(field.key);
+      return line ? {...line, enumKind: field.enum_kind, enumValues: field.enum_values} : null;
+    }).filter(Boolean);
   const points = visibleLines.flatMap((line) => line.points.filter((point) => point[0] >= explorerState.viewStart && point[0] <= explorerState.viewEnd));
   let minY = points.length ? Math.min(...points.map((point) => point[1])) : -1;
   let maxY = points.length ? Math.max(...points.map((point) => point[1])) : 1;
@@ -807,12 +810,29 @@ function drawExplorerPlot({canvas, card, fields}) {
     context.setLineDash([]);
     const values = visibleLines.map((line) => {
       const point = nearestPoint(line.points, explorerState.hoverTime);
-      return point ? `<span><i style="background:${seriesColor(line.key)}"></i>${escapeHtml(line.name)}: <strong>${escapeHtml(formatNumber(point[1]))}</strong></span>` : "";
+      if (!point) return "";
+      const decoded = decodeCurveValue(line, point[1]);
+      return `<span><i style="background:${seriesColor(line.key)}"></i>${escapeHtml(line.name)}: <strong>${escapeHtml(formatNumber(point[1]))}</strong>${decoded ? `<em>${escapeHtml(decoded)}</em>` : ""}</span>`;
     }).join("");
     readout.innerHTML = `<b>${formatNumber(explorerState.hoverTime)} s</b>${values}`;
   } else {
     readout.textContent = visibleLines.length ? "移动鼠标查看采样值" : "当前时间范围没有可显示的数据";
   }
+}
+
+function decodeCurveValue(line, value) {
+  if (!line.enumValues || !line.enumValues.length || !Number.isFinite(Number(value))) return "";
+  const numeric = Math.trunc(Number(value));
+  if (line.enumKind === "bitmask") {
+    if (numeric === 0) return (line.enumValues.find((item) => Number(item.value) === 0) || {}).label || "无故障";
+    const active = line.enumValues.filter((item) => Number(item.value) > 0 && (numeric & Number(item.value)) === Number(item.value));
+    const knownMask = active.reduce((mask, item) => mask | Number(item.value), 0);
+    const labels = active.map((item) => item.label);
+    if ((numeric & ~knownMask) !== 0) labels.push(`包含未知故障位 ${numeric & ~knownMask}`);
+    return labels.join("；") || `未知组合值 ${numeric}`;
+  }
+  const item = line.enumValues.find((entry) => Number(entry.value) === numeric);
+  return item ? item.label : "";
 }
 
 function nearestPoint(points, target) {

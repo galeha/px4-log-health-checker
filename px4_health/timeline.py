@@ -120,6 +120,18 @@ def _category(text: str) -> str:
 
 def _message_related_fields(message: str, category: str) -> list[str]:
     _, content = _clean_message(message)
+    ekf_change = re.match(
+        r"^primary EKF changed ([0-9]+) \(filter fault\) -> ([0-9]+)$",
+        content,
+        flags=re.IGNORECASE,
+    )
+    if ekf_change:
+        previous, current = (int(ekf_change.group(1)), int(ekf_change.group(2)))
+        return [
+            "estimator_selector_status[0].primary_instance",
+            f"estimator_status[{previous}].filter_fault_flags",
+            f"estimator_status[{current}].filter_fault_flags",
+        ]
     clipping = re.match(r"^(Accel|Gyro) ([0-9]+) clipping", content, flags=re.IGNORECASE)
     if not clipping:
         return list(CATEGORY_FIELDS.get(category, CATEGORY_FIELDS["system"]))

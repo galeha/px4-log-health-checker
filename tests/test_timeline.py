@@ -106,6 +106,14 @@ class TimelineTests(unittest.TestCase):
             ("主 EKF 因滤波器故障从实例 1 切换到实例 2", True),
         )
         self.assertEqual(
+            timeline._message_related_fields("[ekf2] primary EKF changed 1 (filter fault) -> 2", "estimator"),
+            [
+                "estimator_selector_status[0].primary_instance",
+                "estimator_status[1].filter_fault_flags",
+                "estimator_status[2].filter_fault_flags",
+            ],
+        )
+        self.assertEqual(
             timeline._translate("[logger] [logger] ./log/2026-08-14/01_55_35.ulg"),
             ("当前飞行日志文件路径已确定", True),
         )
