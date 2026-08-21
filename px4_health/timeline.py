@@ -8,6 +8,8 @@ from typing import Any, Iterable
 import numpy as np
 from pyulog.px4_events import PX4Events
 
+from .px4_enums import NAV_STATE_ENUM, enum_label
+
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 GLOSSARY = json.loads((PACKAGE_DIR / "event_glossary.json").read_text(encoding="utf-8"))
@@ -17,14 +19,6 @@ UNKNOWN_TITLE = "未提供中文解释"
 LEVEL_SEVERITY = {
     "EMERGENCY": "severe", "ALERT": "severe", "CRITICAL": "severe", "ERROR": "severe",
     "WARNING": "warning", "NOTICE": "info", "INFO": "info", "DEBUG": "info", "PROTOCOL": "info",
-}
-NAV_STATES = {
-    0: "手动模式", 1: "定高模式", 2: "定点模式", 3: "自动任务", 4: "自动悬停",
-    5: "自动返航", 6: "自动降落", 7: "自动返航地面站", 8: "自动待命", 9: "自动起飞",
-    10: "发动机故障降落", 11: "精确降落", 12: "环绕模式", 13: "VTOL 自动起飞",
-    14: "外部模式 1", 15: "外部模式 2", 16: "外部模式 3", 17: "外部模式 4",
-    18: "外部模式 5", 19: "外部模式 6", 20: "外部模式 7", 21: "外部模式 8",
-    22: "终止飞行", 23: "关闭电机", 24: "最大状态值",
 }
 ARMING_STATES = {0: "初始化", 1: "待命", 2: "已解锁", 3: "待命错误", 4: "关机", 5: "空中恢复"}
 
@@ -192,7 +186,7 @@ def _status_items(log, origin: int) -> tuple[list[dict[str, Any]], dict[str, boo
             title = "飞行器已解锁" if int(after) == 2 else "飞行器已上锁" if int(before) == 2 else f"解锁状态变为：{state}"
             items.append(_item(timestamp, origin, "info", "flight", title, f"arming_state {int(before)} -> {int(after)}", "vehicle_status.arming_state", True))
         for timestamp, before, after in _transitions(status, "nav_state"):
-            state = NAV_STATES.get(int(after), f"未知模式（{int(after)}）")
+            state = enum_label(NAV_STATE_ENUM, int(after), "未知模式")
             items.append(_item(timestamp, origin, "info", "flight", f"飞行模式切换为：{state}", f"nav_state {int(before)} -> {int(after)}", "vehicle_status.nav_state", True))
         for timestamp, _before, after in _transitions(status, "failsafe"):
             active = bool(after)

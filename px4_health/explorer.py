@@ -13,6 +13,7 @@ import numpy as np
 from pyulog import ULog
 
 from .analyzer import AnalysisError
+from .px4_enums import field_enum
 
 
 MAX_FIELDS = 12
@@ -90,6 +91,10 @@ def build_catalog(log: ULog) -> tuple[list[dict[str, Any]], dict[str, tuple[Any,
                 "type": type_by_name.get(name, str(np.asarray(values).dtype)),
                 "unit": unit,
             }
+            enum_metadata = field_enum(dataset.name, name)
+            if enum_metadata:
+                field["enum_title"] = enum_metadata["title"]
+                field["enum_values"] = enum_metadata["values"]
             fields.append(field)
             lookup[key] = (dataset, name)
         if fields:

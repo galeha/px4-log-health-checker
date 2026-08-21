@@ -78,6 +78,25 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(field_unit("sensor_accel", "clip_counter[2]"), "次")
         self.assertEqual(field_unit("custom_topic", "mystery"), "")
 
+    def test_nav_state_catalog_includes_flight_mode_enum(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("vehicle_status", {"timestamp": timestamps, "nav_state": [17, 4, 1]})])
+        topics, _ = build_catalog(log)
+        field = topics[0]["fields"][0]
+        modes = {item["value"]: item["label"] for item in field["enum_values"]}
+        self.assertEqual(modes[17], "自动起飞")
+        self.assertEqual(modes[4], "自动悬停")
+        self.assertEqual(modes[1], "定高模式")
+
+    def test_failsafe_catalog_includes_boolean_meanings(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("vehicle_status", {"timestamp": timestamps, "failsafe": [0, 1, 0]})])
+        topics, _ = build_catalog(log)
+        field = topics[0]["fields"][0]
+        meanings = {item["value"]: item["label"] for item in field["enum_values"]}
+        self.assertEqual(field["enum_title"], "数字对应的失效保护状态")
+        self.assertEqual(meanings, {0: "未启用失效保护", 1: "已启用失效保护"})
+
     def test_store_queries_range_and_limits_fields(self):
         log = sample_log()
         with tempfile.NamedTemporaryFile(suffix=".ulg", delete=False) as handle:
