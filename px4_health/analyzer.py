@@ -17,8 +17,11 @@ TOPICS = [
     "actuator_motors",
     "battery_status",
     "control_allocator_status",
+    "event",
     "estimator_status",
     "estimator_status_flags",
+    "failsafe_flags",
+    "failure_detector_status",
     "sensor_accel",
     "sensor_combined",
     "sensor_gps",
@@ -567,6 +570,8 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
     if not supported:
         raise AnalysisError(f"检测到{vehicle}日志；首版仅支持 PX4 多旋翼。")
     start, end, scope, has_flight = _flight_window(log)
+    from .timeline import build_timeline
+    timeline = build_timeline(log)
     metrics = []
     analyzers = (
         (_vibration, "vibration", "机体振动"),
@@ -622,6 +627,7 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
             "candidate_algorithm_version": CANDIDATE_RULES["version"],
         },
         "overall": overall,
+        "timeline": timeline,
         "metrics": metrics,
         "disclaimer": "本结果仅供飞后维护排查，不能替代飞前检查、机体检查或飞行安全决策。",
     }

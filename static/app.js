@@ -5,6 +5,7 @@ const progressPanel = $("#progressPanel");
 const errorPanel = $("#errorPanel");
 const results = $("#results");
 let explorerState = null;
+let timelineState = null;
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -84,9 +85,132 @@ function renderResults(data) {
     button.closest(".metric-card").classList.toggle("open");
   }));
   initExplorer(data.explorer);
+  renderTimeline(data.timeline);
   document.querySelectorAll("[data-anomaly-start]").forEach((button) => button.addEventListener("click", jumpToAnomaly));
   showOnly(results);
   results.scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+const timelineCategories = {
+  flight: "飞行状态", failsafe: "失效保护", gps: "GPS / 定位", battery: "电池",
+  estimator: "估计器", motor: "电机 / 电调", control: "控制", system: "系统消息",
+};
+
+const timelineSeverities = {severe: "严重", warning: "警告", info: "信息"};
+
+function renderTimeline(timeline) {
+  const panel = $("#flightTimeline");
+  if (!timeline) {
+    timelineState = null;
+    panel.classList.add("hidden");
+    return;
+  }
+  timelineState = {data: timeline, scope: "important", category: "all"};
+  panel.classList.remove("hidden");
+  const summary = timeline.summary || {};
+  $("#timelineSummaryText").textContent = summary.severe_count || summary.warning_count
+    ? `记录到 ${summary.severe_count || 0} 条严重事件、${summary.warning_count || 0} 条警告。时间线不会改变五项健康总评。`
+    : "没有记录到重要告警；可切换到“全部事件”查看模式和起降过程。";
+  $("#timelineSummaryBadges").innerHTML = `
+    <span class="severe">严重 ${escapeHtml(summary.severe_count || 0)}</span>
+    <span class="warning">警告 ${escapeHtml(summary.warning_count || 0)}</span>
+    <span>失效保护 ${escapeHtml(summary.failsafe_count || 0)}</span>
+    <span>全部 ${escapeHtml(summary.total_count || 0)}</span>`;
+  const categories = [...new Set((timeline.items || []).map((item) => item.category))];
+  $("#timelineCategory").innerHTML = `<option value="all">全部分类</option>${categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(timelineCategories[category] || category)}</option>`).join("")}`;
+  $("#timelineCategory").value = "all";
+  $("#timelineCategory").onchange = (event) => {
+    timelineState.category = event.target.value;
+    renderTimelineItems();
+  };
+  panel.querySelectorAll("[data-timeline-scope]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.timelineScope === "important");
+    button.onclick = () => {
+      timelineState.scope = button.dataset.timelineScope;
+      panel.querySelectorAll("[data-timeline-scope]").forEach((item) => item.classList.toggle("active", item === button));
+      renderTimelineItems();
+    };
+  });
+  const notices = [];
+  if (timeline.truncated) notices.push(`事件超过显示上限，目前优先显示 ${summary.displayed_count} 条重要记录。`);
+  if ((timeline.missing_sources || []).length) notices.push(`日志未包含部分事件源：${timeline.missing_sources.join("、")}。`);
+  const notice = $("#timelineNotice");
+  notice.textContent = notices.join(" ");
+  notice.classList.toggle("hidden", !notices.length);
+  $("#timelineItems").onclick = handleTimelineClick;
+  renderTimelineItems();
+}
+
+function renderTimelineItems() {
+  if (!timelineState) return;
+  const items = (timelineState.data.items || []).filter((item) =>
+    (timelineState.scope === "all" || item.important) &&
+    (timelineState.category === "all" || item.category === timelineState.category));
+  $("#timelineItems").innerHTML = items.length ? items.map((item, index) => `<details class="timeline-item ${escapeHtml(item.severity)}" data-timeline-index="${index}">
+    <summary data-timeline-time="${escapeHtml(item.time_s)}">
+      <time>${escapeHtml(formatTimelineTime(item.time_s))}</time>
+      <span class="timeline-marker" aria-hidden="true"></span>
+      <span class="timeline-title"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(timelineCategories[item.category] || item.category)} · ${escapeHtml(item.source)}${item.count > 1 ? ` · 重复 ${escapeHtml(item.count)} 次` : ""}</small></span>
+      <em>${escapeHtml(timelineSeverities[item.severity] || item.severity)}</em>
+    </summary>
+    <div class="timeline-detail">
+      <div><small>PX4 原文</small><code>${escapeHtml(item.original || "无原文")}</code></div>
+      <button type="button" data-timeline-fields="${escapeHtml((item.related_fields || []).join("|"))}" data-timeline-time="${escapeHtml(item.time_s)}">查看相关曲线</button>
+    </div>
+  </details>`).join("") : `<p class="timeline-empty">当前筛选条件下没有事件。</p>`;
+}
+
+function formatTimelineTime(seconds) {
+  const value = Math.max(0, Number(seconds) || 0);
+  const minutes = Math.floor(value / 60);
+  const remainder = value - minutes * 60;
+  return `${minutes}:${remainder.toFixed(1).padStart(4, "0")}`;
+}
+
+function handleTimelineClick(event) {
+  const fieldsButton = event.target.closest("[data-timeline-fields]");
+  if (fieldsButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    jumpToTimelineTime(Number(fieldsButton.dataset.timelineTime), true);
+    addTimelineFields(fieldsButton.dataset.timelineFields.split("|").filter(Boolean));
+    return;
+  }
+  const summary = event.target.closest("summary[data-timeline-time]");
+  if (summary) jumpToTimelineTime(Number(summary.dataset.timelineTime));
+}
+
+function jumpToTimelineTime(time, scroll = false) {
+  if (!explorerState || !Number.isFinite(time)) return;
+  setExplorerRange(time - 5, time + 10);
+  if (scroll) $("#logExplorer").scrollIntoView({behavior: "smooth", block: "start"});
+  if (explorerState.selected.size) queueSeriesLoad(0);
+  else showExplorerMessage(`已定位到事件附近 ${formatNumber(explorerState.viewStart)}–${formatNumber(explorerState.viewEnd)} s，可选择曲线或点击“查看相关曲线”。`);
+}
+
+function resolveTimelineField(key) {
+  if (explorerState.fields.has(key)) return key;
+  const match = key.match(/^(.+)\[\d+\]\.(.+)$/);
+  if (!match) return null;
+  const candidate = [...explorerState.fields.entries()].find(([, field]) => field.topic === match[1] && field.name === match[2]);
+  return candidate ? candidate[0] : null;
+}
+
+function addTimelineFields(requested) {
+  if (!explorerState) return;
+  const resolved = [...new Set(requested.map(resolveTimelineField).filter(Boolean))];
+  const added = [];
+  for (const key of resolved) {
+    if (explorerState.selected.has(key)) continue;
+    if (explorerState.selected.size >= 12) break;
+    if (addExplorerField(key, "auto")) added.push(key);
+  }
+  if (!resolved.length) showExplorerMessage("这份日志没有记录该事件对应的推荐曲线字段。", true);
+  else if (!added.length) showExplorerMessage("相关曲线已经选中，或当前已达到 12 条曲线限制。", explorerState.selected.size >= 12);
+  else {
+    showExplorerMessage(`已添加 ${added.length} 条相关曲线。`);
+    queueSeriesLoad(0);
+  }
 }
 
 const percentileHelp = {
@@ -335,8 +459,13 @@ function handleFieldClick(event) {
     showExplorerMessage("一次最多显示 12 条曲线，请先移除不需要的字段。", true);
     return;
   }
-  const field = explorerState.fields.get(key);
-  const target = $("#plotTarget").value;
+  addExplorerField(key, $("#plotTarget").value);
+  queueSeriesLoad(0);
+}
+
+function addExplorerField(key, target = "auto") {
+  const field = explorerState && explorerState.fields.get(key);
+  if (!field || explorerState.selected.has(key) || explorerState.selected.size >= 12) return false;
   let plotId;
   if (target !== "auto" && target !== "new" && explorerState.plots.has(target)) {
     plotId = target;
@@ -353,7 +482,7 @@ function handleFieldClick(event) {
   explorerState.selected.set(key, {...field, plotId});
   renderFieldTree();
   renderExplorerSelection();
-  queueSeriesLoad(0);
+  return true;
 }
 
 function ensurePlot(id, title, unit = "") {

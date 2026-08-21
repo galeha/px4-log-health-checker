@@ -66,6 +66,27 @@
       </div>
 
       <div id="metaGrid" class="meta-grid"></div>
+      <section id="flightTimeline" class="flight-timeline hidden" aria-labelledby="timelineTitle">
+        <div class="timeline-heading">
+          <div>
+            <p class="eyebrow">飞行过程记录</p>
+            <h3 id="timelineTitle">事件与告警时间线</h3>
+            <p id="timelineSummaryText"></p>
+          </div>
+          <div id="timelineSummaryBadges" class="timeline-summary-badges"></div>
+        </div>
+        <div class="timeline-toolbar">
+          <div class="timeline-scope" role="group" aria-label="时间线显示范围">
+            <button type="button" data-timeline-scope="important" class="active">重要事件</button>
+            <button type="button" data-timeline-scope="all">全部事件</button>
+          </div>
+          <label>分类
+            <select id="timelineCategory"><option value="all">全部分类</option></select>
+          </label>
+        </div>
+        <p id="timelineNotice" class="timeline-notice hidden"></p>
+        <div id="timelineItems" class="timeline-items"></div>
+      </section>
       <div id="metricGrid" class="metric-grid"></div>
 
       <section id="logExplorer" class="log-explorer">

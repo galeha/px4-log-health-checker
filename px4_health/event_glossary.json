@@ -1,0 +1,73 @@
+{
+  "exact": {
+    "Takeoff detected": "检测到起飞",
+    "Landing detected": "检测到降落",
+    "Land detected": "检测到着陆",
+    "Armed by RC": "通过遥控器解锁",
+    "Disarmed by RC": "通过遥控器上锁",
+    "Failsafe activated": "失效保护已触发",
+    "Failsafe mode activated": "已进入失效保护模式",
+    "Manual control lost": "遥控或手动控制信号丢失",
+    "Manual control regained": "遥控或手动控制信号恢复",
+    "Data link lost": "数据链路丢失",
+    "Data link regained": "数据链路恢复",
+    "Mission finished, landed": "任务完成并已降落",
+    "Executing Mission": "开始执行任务",
+    "notify positive": "正向提示音"
+    ,"Start mavlink log": "开始 MAVLink 日志记录"
+    ,"Starting mavlink shell": "启动 MAVLink 命令行"
+    ,"Stopping mavlink shell": "停止 MAVLink 命令行"
+    ,"Disarmed by landing": "着陆后自动上锁"
+    ,"RTL: land at destination": "返航并在目标点降落"
+    ,"Returning to launch": "正在返回起飞点"
+    ,"Landing at current position": "正在当前位置降落"
+    ,"Armed by external command": "通过外部命令解锁"
+    ,"Armed by RC switch": "通过遥控器开关解锁"
+    ,"Kill engaged": "紧急停转已触发"
+    ,"Kill disengaged": "紧急停转已解除"
+    ,"Pilot took over using sticks": "飞手通过摇杆接管控制"
+    ,"Disarming denied: not landed": "拒绝上锁：尚未检测到着陆"
+    ,"Failsafe warning:": "失效保护警告"
+    ,"Failsafe warning: Manual control loss": "失效保护警告：手动控制信号丢失"
+    ,"Failsafe activated: switching to Position mode": "失效保护触发：切换至定点模式"
+    ,"GCS connection regained": "地面站连接已恢复"
+    ,"Preflight Fail: Flight termination active": "飞行前检查失败：飞行终止仍处于启用状态"
+    ,"Preflight Fail: heading estimate not stable": "飞行前检查失败：航向估计不稳定"
+    ,"Preflight: GPS PDOP too high": "飞行前检查失败：GPS PDOP 过高"
+    ,"Preflight Fail: Kill switch engaged": "飞行前检查失败：紧急停转开关已触发"
+    ,"Preflight Fail: Strong magnetic interference": "飞行前检查失败：磁场干扰严重"
+    ,"notify neutral": "中性提示音"
+    ,"notify negative": "负向告警提示音"
+  },
+  "patterns": [
+    {"pattern": "^Climb to ([0-9.]+) (?:meters|m) above home$", "replacement": "爬升至家位置上方 \\1 米"},
+    {"pattern": ".*Preflight Fail: Attitude failure.*", "replacement": "飞行前检查失败：姿态状态异常"},
+    {"pattern": "^Battery warning.*", "replacement": "电池状态告警"},
+    {"pattern": "^Low battery.*", "replacement": "电池电量低"},
+    {"pattern": "^Critical battery.*", "replacement": "电池电量严重不足"},
+    {"pattern": "^Emergency battery.*", "replacement": "电池电量已到紧急水平"},
+    {"pattern": ".*GPS.*lost.*", "replacement": "GPS 定位丢失"},
+    {"pattern": ".*GPS.*found.*", "replacement": "GPS 定位恢复"},
+    {"pattern": ".*EKF.*warning.*", "replacement": "EKF 状态告警"},
+    {"pattern": ".*motor.*failure.*", "replacement": "检测到电机故障"},
+    {"pattern": ".*geofence.*", "replacement": "触发地理围栏相关事件"},
+    {"pattern": ".*mission.*failed.*", "replacement": "任务执行失败"},
+    {"pattern": ".*RC.*lost.*", "replacement": "遥控信号丢失"}
+    ,{"pattern": "^RTL: start return at ([0-9.]+) m.*$", "replacement": "开始返航，计划返航高度 \\1 米"}
+    ,{"pattern": "^Disarmed by (.*)$", "replacement": "飞行器已上锁（原因：\\1）"}
+    ,{"pattern": "^Manual control regained after ([0-9.]+) s$", "replacement": "手动控制信号在 \\1 秒后恢复"}
+    ,{"pattern": "^Preflight Fail: Compasses .* inconsistent$", "replacement": "飞行前检查失败：多个磁力计读数不一致"}
+    ,{"pattern": "^Matching flight task was not able to run.*$", "replacement": "当前飞行模式对应的飞行任务无法运行"}
+    ,{"pattern": "^Switching to mode '([^']+)' is currently not possible$", "replacement": "当前无法切换至 \\1 模式"}
+    ,{"pattern": "^Switching to ([^ ]+) is currently not available$", "replacement": "当前无法切换至 \\1 模式"}
+    ,{"pattern": "^logging: opening log file .*$", "replacement": "打开新的飞行日志文件"}
+    ,{"pattern": "^closed logfile, bytes written: .*$", "replacement": "飞行日志文件已关闭"}
+    ,{"pattern": ".*offset committed:.*", "replacement": "传感器偏置更新已保存"}
+    ,{"pattern": ".*EST:[0-9]+ offset:.*", "replacement": "传感器在线偏置已更新"}
+    ,{"pattern": ".*timestamp error.*", "replacement": "传感器采样时间戳异常"}
+    ,{"pattern": "^Configured primary gimbal control.*$", "replacement": "已配置主云台控制链路"}
+    ,{"pattern": "^GIMBAL_MANAGER_PITCHYAW .* denied.*$", "replacement": "云台俯仰/偏航控制请求被拒绝"}
+    ,{"pattern": "^Start file log \\(type: ([^)]+)\\)$", "replacement": "开始文件日志记录（类型：\\1）"}
+    ,{"pattern": "^using network interface .*$", "replacement": "MAVLink 已启用网络接口"}
+  ]
+}
