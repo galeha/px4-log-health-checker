@@ -93,7 +93,7 @@ function renderResults(data) {
 
 const timelineCategories = {
   flight: "飞行状态", failsafe: "失效保护", gps: "GPS / 定位", battery: "电池",
-  estimator: "估计器", motor: "电机 / 电调", control: "控制", system: "系统消息",
+  estimator: "估计器", motor: "电机 / 电调", control: "控制", sensor: "传感器", system: "系统消息",
 };
 
 const timelineSeverities = {severe: "严重", warning: "警告", info: "信息"};

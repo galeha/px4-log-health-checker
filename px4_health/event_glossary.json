@@ -38,6 +38,8 @@
     ,"Preflight Fail: Strong magnetic interference": "飞行前检查失败：磁场干扰严重"
     ,"notify neutral": "中性提示音"
     ,"notify negative": "负向告警提示音"
+    ,"arming warning": "解锁警告提示音"
+    ,"Mission finished, loitering": "任务完成，飞行器进入悬停"
   },
   "patterns": [
     {"pattern": "^Climb to ([0-9.]+) (?:meters|m) above home$", "replacement": "爬升至家位置上方 \\1 米"},
@@ -69,5 +71,14 @@
     ,{"pattern": "^GIMBAL_MANAGER_PITCHYAW .* denied.*$", "replacement": "云台俯仰/偏航控制请求被拒绝"}
     ,{"pattern": "^Start file log \\(type: ([^)]+)\\)$", "replacement": "开始文件日志记录（类型：\\1）"}
     ,{"pattern": "^using network interface .*$", "replacement": "MAVLink 已启用网络接口"}
+    ,{"pattern": "^Accel ([0-9]+) clipping, not safe to fly!$", "replacement": "加速度计 \\1 测量超过量程，飞行不安全！"}
+    ,{"pattern": "^Gyro ([0-9]+) clipping, not safe to fly!$", "replacement": "陀螺仪 \\1 测量超过量程，飞行不安全！"}
+    ,{"pattern": "^primary EKF changed ([0-9]+) \\(filter fault\\) -> ([0-9]+)$", "replacement": "主 EKF 因滤波器故障从实例 \\1 切换到实例 \\2"}
+    ,{"pattern": "^Opened full log file: .+$", "replacement": "已打开完整飞行日志文件"}
+    ,{"pattern": "^(?:\\[logger\\]\\s*)?(?:\\./|/).+\\.ulg$", "replacement": "当前飞行日志文件路径已确定"}
+    ,{"pattern": "^with netmask: (.+)$", "replacement": "MAVLink 网络子网掩码：\\1"}
+    ,{"pattern": "^and broadcast IP: (.+)$", "replacement": "MAVLink 网络广播地址：\\1"}
+    ,{"pattern": "^successfully created (.+) data writer, topic id: ([0-9]+)$", "replacement": "XRCE-DDS 已创建数据发布端：\\1（主题 ID：\\2）"}
+    ,{"pattern": "^(?:\\[BGarage\\])?:?\\s*Custom(?:ized)? Landing\\.?$", "replacement": "执行自定义降落（第三方模块消息）"}
   ]
 }

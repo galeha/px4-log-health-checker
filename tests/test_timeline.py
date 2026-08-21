@@ -88,6 +88,37 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["original"], "[custom] Something new happened")
         self.assertEqual(len(result["items"]), 2)
 
+    def test_common_px4_messages_use_safe_template_translations(self):
+        title, translated = timeline._translate("[vehicle_imu] Accel 1 clipping, not safe to fly!")
+        self.assertTrue(translated)
+        self.assertEqual(title, "加速度计 1 测量超过量程，飞行不安全！")
+        self.assertEqual(timeline._category("Accel 1 clipping, not safe to fly!"), "sensor")
+        self.assertEqual(
+            timeline._message_related_fields("Accel 1 clipping, not safe to fly!", "sensor"),
+            [
+                "sensor_accel[1].x", "sensor_accel[1].y", "sensor_accel[1].z",
+                "sensor_accel[1].clip_counter[0]", "sensor_accel[1].clip_counter[1]",
+                "sensor_accel[1].clip_counter[2]",
+            ],
+        )
+        self.assertEqual(
+            timeline._translate("primary EKF changed 1 (filter fault) -> 2"),
+            ("主 EKF 因滤波器故障从实例 1 切换到实例 2", True),
+        )
+        self.assertEqual(
+            timeline._translate("[logger] [logger] ./log/2026-08-14/01_55_35.ulg"),
+            ("当前飞行日志文件路径已确定", True),
+        )
+        self.assertEqual(
+            timeline._translate("[navigator] [BGarage]: Custom Landing."),
+            ("执行自定义降落（第三方模块消息）", True),
+        )
+
+    def test_unknown_numeric_event_id_is_not_guessed(self):
+        title, translated = timeline._translate("[Unknown event with ID 26266355]")
+        self.assertFalse(translated)
+        self.assertEqual(title, "无法解析的 PX4 事件（ID：26266355）")
+
     def test_truncation_prioritizes_important_items(self):
         messages = [FakeMessage(1_000_000 + index * 2_000_000, "INFO", f"message {index}") for index in range(6)]
         messages.append(FakeMessage(20_000_000, "ERROR", "critical failure"))

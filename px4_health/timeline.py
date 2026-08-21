@@ -70,6 +70,7 @@ CATEGORY_FIELDS = {
     "estimator": ["estimator_status[0].innovation_test_ratio", "estimator_status_flags[0].cs_inertial_dead_reckoning"],
     "motor": [f"actuator_motors[0].control[{index}]" for index in range(4)],
     "control": ["vehicle_attitude[0].q[0]", "vehicle_attitude_setpoint[0].q_d[0]"],
+    "sensor": ["sensor_accel[0].x", "sensor_accel[0].y", "sensor_accel[0].z"],
     "system": ["vehicle_status[0].nav_state", "vehicle_status[0].failsafe"],
 }
 
@@ -86,7 +87,10 @@ def _clean_message(message: str) -> tuple[str, str]:
 
 
 def _translate(message: str) -> tuple[str, bool]:
-    _, content = _clean_message(message)
+    original, content = _clean_message(message)
+    unknown_event = re.fullmatch(r"\[Unknown event with ID ([0-9]+)]", original)
+    if unknown_event:
+        return f"无法解析的 PX4 事件（ID：{unknown_event.group(1)}）", False
     if content in GLOSSARY["exact"]:
         return GLOSSARY["exact"][content], True
     for item in GLOSSARY["patterns"]:
@@ -105,11 +109,28 @@ def _category(text: str) -> str:
         return "estimator"
     if any(word in value for word in ("motor", "esc", "prop")):
         return "motor"
+    if any(word in value for word in ("accel", "gyro", "imu", "clipping")):
+        return "sensor"
     if any(word in value for word in ("failsafe", "signal lost", "link lost", "mission fail", "failure", "kill", "termination")):
         return "failsafe"
     if any(word in value for word in ("arm", "takeoff", "land", "mission", "rtl", "loiter")):
         return "flight"
     return "system"
+
+
+def _message_related_fields(message: str, category: str) -> list[str]:
+    _, content = _clean_message(message)
+    clipping = re.match(r"^(Accel|Gyro) ([0-9]+) clipping", content, flags=re.IGNORECASE)
+    if not clipping:
+        return list(CATEGORY_FIELDS.get(category, CATEGORY_FIELDS["system"]))
+    topic = "sensor_accel" if clipping.group(1).lower() == "accel" else "sensor_gyro"
+    instance = int(clipping.group(2))
+    return [
+        f"{topic}[{instance}].x",
+        f"{topic}[{instance}].y",
+        f"{topic}[{instance}].z",
+        *[f"{topic}[{instance}].clip_counter[{axis}]" for axis in range(3)],
+    ]
 
 
 def _item(timestamp: int, origin: int, severity: str, category: str, title: str, original: str,
@@ -136,7 +157,8 @@ def _message_items(log, origin: int) -> tuple[list[dict[str, Any]], bool, bool]:
         severity = LEVEL_SEVERITY.get(level, "info")
         category = _category(original)
         important = severity in {"warning", "severe"} or category == "failsafe"
-        items.append(_item(message.timestamp, origin, severity, category, title, original, "logged_message", important))
+        items.append(_item(message.timestamp, origin, severity, category, title, original, "logged_message", important,
+                           _message_related_fields(original, category)))
 
     event_available = _dataset(log, "event") is not None
     embedded = "metadata_events" in getattr(log, "msg_info_multiple_dict", {})
@@ -149,7 +171,8 @@ def _message_items(log, origin: int) -> tuple[list[dict[str, Any]], bool, bool]:
             severity = LEVEL_SEVERITY.get(level.upper(), "info")
             category = _category(original)
             important = severity in {"warning", "severe"} or category == "failsafe"
-            items.append(_item(timestamp, origin, severity, category, title, original, "event", important))
+            items.append(_item(timestamp, origin, severity, category, title, original, "event", important,
+                               _message_related_fields(original, category)))
     return items, event_available, embedded
 
 
