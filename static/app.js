@@ -610,12 +610,12 @@ function renderExplorerPlots() {
     const plot = explorerState.plots.get(plotId);
     const legend = fields.map((field) => {
       const hidden = explorerState.hidden.has(field.key);
-      return `<span class="${hidden ? "curve-hidden" : ""}" data-toggle-series="${escapeHtml(field.key)}" aria-label="点击${hidden ? "显示" : "隐藏"}这条曲线"><i style="background:${seriesColor(field.key)}"></i>${enumFieldHelp(field.key, field.enum_values, field.enum_title)}<button type="button" data-remove-field="${escapeHtml(field.key)}" title="移除曲线">×</button></span>`;
+      return `<span class="${hidden ? "curve-hidden" : ""}" data-toggle-series="${escapeHtml(field.key)}" aria-label="点击${hidden ? "显示" : "隐藏"}这条曲线"><i style="background:${seriesColor(field.key)}"></i>${enumFieldHelp(field.key, field.enum_values, field.enum_title, false, field.enum_note)}<button type="button" data-remove-field="${escapeHtml(field.key)}" title="移除曲线">×</button></span>`;
     }).join("");
     const enumFields = fields.filter((field) => field.enum_values && field.enum_values.length);
     const plotEnum = enumFields.length === 1 ? enumFields[0] : null;
     return `<article class="explorer-plot" data-plot-id="${escapeHtml(plotId)}">
-      <header><div><h4>${enumFieldHelp(plotDisplayName(plot), plotEnum && plotEnum.enum_values, plotEnum && plotEnum.enum_title, true)}</h4><small>${escapeHtml(plot.unit || "单位未知 / 自定义组合")}</small></div>
+      <header><div><h4>${enumFieldHelp(plotDisplayName(plot), plotEnum && plotEnum.enum_values, plotEnum && plotEnum.enum_title, true, plotEnum && plotEnum.enum_note)}</h4><small>${escapeHtml(plot.unit || "单位未知 / 自定义组合")}</small></div>
         <button type="button" data-toggle-legend="${escapeHtml(plotId)}">${plot.legendVisible ? "隐藏图例" : "显示图例"}</button></header>
       <div class="explorer-legend${plot.legendVisible ? "" : " hidden"}">${legend}</div>
       <div class="canvas-wrap"><canvas aria-label="${escapeHtml(plot.title)}曲线"></canvas></div>
@@ -633,12 +633,12 @@ function renderExplorerPlots() {
   drawAllExplorerPlots();
 }
 
-function enumFieldHelp(label, values, title = "各数字对应的状态", plain = false) {
+function enumFieldHelp(label, values, title = "各数字对应的状态", plain = false, note = "") {
   if (!values || !values.length) return plain ? `<span>${escapeHtml(label)}</span>` : `<code>${escapeHtml(label)}</code>`;
   const unique = new Map(values.map((item) => [item.value, item]));
   const rows = [...unique.values()].sort((left, right) => Number(left.value) - Number(right.value)).map((item) =>
     `<span><b>${escapeHtml(item.value)}</b><i>${escapeHtml(item.label)}</i><small>${escapeHtml(item.code)}</small></span>`).join("");
-  return `<span class="enum-field-help" tabindex="0"><code>${escapeHtml(label)}</code><span class="enum-tooltip" role="tooltip"><strong>${escapeHtml(title || "各数字对应的状态")}</strong><span class="enum-grid">${rows}</span><em>未列出的数字按未知状态处理；映射依据 PX4 VehicleStatus 定义。</em></span></span>`;
+  return `<span class="enum-field-help" tabindex="0"><code>${escapeHtml(label)}</code><span class="enum-tooltip" role="tooltip"><strong>${escapeHtml(title || "各数字对应的状态")}</strong><span class="enum-grid">${rows}</span><em>${escapeHtml(note || "未列出的数字按未知状态处理。")}</em></span></span>`;
 }
 
 function handlePlotAction(event) {

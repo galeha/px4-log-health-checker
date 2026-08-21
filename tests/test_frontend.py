@@ -18,6 +18,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("resolveTimelineField", javascript)
         self.assertIn("function enumFieldHelp(", javascript)
         self.assertIn("field.enum_title", javascript)
+        self.assertIn("field.enum_note", javascript)
         styles = (ROOT / "static" / "styles.css").read_text(encoding="utf-8")
         self.assertIn(".explorer-legend .enum-tooltip { display: block", styles)
         self.assertIn(".explorer-legend .enum-grid { display: grid", styles)

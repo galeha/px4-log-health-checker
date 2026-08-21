@@ -43,9 +43,40 @@ FAILSAFE_ENUM = {
     1: ("已启用失效保护", "true"),
 }
 
+FILTER_FAULT_FLAGS = {
+    0: ("无 EKF 内部故障", "无故障位"),
+    1: ("磁力计 X 轴融合数值错误", "bit 0 · bad_mag_x"),
+    2: ("磁力计 Y 轴融合数值错误", "bit 1 · bad_mag_y"),
+    4: ("磁力计 Z 轴融合数值错误", "bit 2 · bad_mag_z"),
+    8: ("航向角融合数值错误", "bit 3 · bad_hdg"),
+    16: ("磁偏角融合数值错误", "bit 4 · bad_mag_decl"),
+    32: ("空速融合数值错误", "bit 5 · bad_airspeed"),
+    64: ("侧滑约束融合数值错误", "bit 6 · bad_sideslip"),
+    128: ("光流 X 轴融合数值错误", "bit 7 · bad_optflow_X"),
+    256: ("光流 Y 轴融合数值错误", "bit 8 · bad_optflow_Y"),
+    512: ("加速度偏置估计异常", "bit 9 · bad_acc_bias"),
+    1024: ("垂直加速度数据异常", "bit 10 · bad_acc_vertical"),
+    2048: ("加速度数据削波或非对称触顶", "bit 11 · bad_acc_clipping"),
+}
+
+FILTER_FAULT_NOTE = (
+    "这是位掩码，不是单选枚举：0 表示没有 EKF 内部故障；非零值可能同时包含多项，"
+    "需要把已置位的数值相加。例如 3072 = 1024 + 2048，表示垂直加速度异常与加速度削波同时存在。"
+    "映射依据 PX4 1.15 EKF fault_status_u 定义。"
+)
+
 FIELD_ENUMS = {
-    ("vehicle_status", "nav_state"): ("各数字对应的飞行模式", NAV_STATE_ENUM),
-    ("vehicle_status", "failsafe"): ("数字对应的失效保护状态", FAILSAFE_ENUM),
+    ("vehicle_status", "nav_state"): (
+        "各数字对应的飞行模式", NAV_STATE_ENUM,
+        "未列出的数字按未知状态处理；映射依据 PX4 VehicleStatus 定义。",
+    ),
+    ("vehicle_status", "failsafe"): (
+        "数字对应的失效保护状态", FAILSAFE_ENUM,
+        "0 表示没有启用失效保护，1 表示已经启用失效保护。",
+    ),
+    ("estimator_status", "filter_fault_flags"): (
+        "EKF 内部故障位掩码", FILTER_FAULT_FLAGS, FILTER_FAULT_NOTE,
+    ),
 }
 
 
@@ -58,9 +89,10 @@ def field_enum(topic: str, field: str) -> dict[str, Any] | None:
     metadata = FIELD_ENUMS.get((topic, field))
     if not metadata:
         return None
-    title, mapping = metadata
+    title, mapping, note = metadata
     return {
         "title": title,
+        "note": note,
         "values": [
             {"value": value, "label": label, "code": code}
             for value, (label, code) in sorted(mapping.items())

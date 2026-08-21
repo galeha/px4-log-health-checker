@@ -29,6 +29,7 @@ TOPICS = [
     "vehicle_attitude",
     "vehicle_attitude_setpoint",
     "vehicle_land_detected",
+    "vehicle_imu_status",
     "vehicle_status",
 ]
 
@@ -172,20 +173,54 @@ def _unavailable(metric_id: str, name: str, reason: str, log: ULog) -> dict[str,
 def _vibration(log: ULog, start: int, end: int) -> dict[str, Any]:
     rules = RULES["vibration"]
     clip_count = 0
+    clip_breakdown: list[tuple[int, int, int]] = []
     data_sources = []
-    clip_dataset = _dataset(log, "sensor_accel")
     has_clip_data = False
-    for axis in range(3):
-        _, values = _masked(clip_dataset, start, end, f"clip_counter[{axis}]")
-        clean = _finite(values)
-        if clean.size:
-            has_clip_data = True
-            clip_count += max(0, int(clean[-1] - clean[0]))
+
+    # vehicle_imu_status contains the cumulative clipping total per IMU and axis.
+    # Sum positive increments so an in-flight counter reset does not hide earlier clipping.
+    imu_status_datasets = sorted(
+        (dataset for dataset in log.data_list if dataset.name == "vehicle_imu_status"),
+        key=lambda dataset: dataset.multi_id,
+    )
+    for dataset in imu_status_datasets:
+        for axis in range(3):
+            _, values = _masked(dataset, start, end, f"accel_clipping[{axis}]")
+            clean = _finite(values)
+            if clean.size:
+                has_clip_data = True
+                count = int(np.sum(np.maximum(np.diff(clean), 0))) if clean.size > 1 else 0
+                clip_count += count
+                if count:
+                    clip_breakdown.append((int(dataset.multi_id), axis, count))
     if has_clip_data:
         data_sources.append(_source(
-            "sensor_accel", "clip_counter[0..2]", "三轴加速度计削波累计计数", "次",
-            "用飞行结束值减去开始值，判断传感器是否超过量程。",
+            "vehicle_imu_status[*]", "accel_clipping[0..2]", "各 IMU 三轴加速度累计削波计数", "次",
+            "分别计算每个 IMU、每个轴在飞行阶段的累计计数增量，再汇总削波次数。",
         ))
+
+    # Older logs may not contain vehicle_imu_status. sensor_accel.clip_counter is
+    # a per-sample-period count, not a cumulative counter, so sum the recorded values.
+    if not has_clip_data:
+        accel_datasets = sorted(
+            (dataset for dataset in log.data_list if dataset.name == "sensor_accel"),
+            key=lambda dataset: dataset.multi_id,
+        )
+        for dataset in accel_datasets:
+            for axis in range(3):
+                _, values = _masked(dataset, start, end, f"clip_counter[{axis}]")
+                clean = _finite(values)
+                if clean.size:
+                    has_clip_data = True
+                    count = int(np.sum(np.maximum(clean, 0)))
+                    clip_count += count
+                    if count:
+                        clip_breakdown.append((int(dataset.multi_id), axis, count))
+        if has_clip_data:
+            data_sources.append(_source(
+                "sensor_accel[*]", "clip_counter[0..2]", "各加速度计采样周期内的三轴削波计数", "次",
+                "旧日志回退方式：汇总每个传感器、每个轴在日志中记录到的采样周期削波次数。",
+            ))
 
     combined = _dataset(log, "sensor_combined")
     ts = _field(combined, "timestamp")
@@ -257,7 +292,11 @@ def _vibration(log: ULog, start: int, end: int) -> dict[str, Any]:
 
     labels = ("正常", "偏大", "严重")
     summary = reasons[0] if reasons else "未发现明显高频振动或传感器削波"
-    evidence = [_evidence("加速度计削波次数", clip_count, "次")]
+    evidence = [_evidence("加速度计削波总次数", clip_count, "次")]
+    evidence.extend(
+        _evidence(f"IMU {instance} {'XYZ'[axis]} 轴加速度削波", count, "次")
+        for instance, axis, count in clip_breakdown
+    )
     series = vibe_series
     if accel_axis_rms.size:
         axis_evidence = []

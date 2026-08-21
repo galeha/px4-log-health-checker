@@ -94,6 +94,7 @@ def build_catalog(log: ULog) -> tuple[list[dict[str, Any]], dict[str, tuple[Any,
             enum_metadata = field_enum(dataset.name, name)
             if enum_metadata:
                 field["enum_title"] = enum_metadata["title"]
+                field["enum_note"] = enum_metadata["note"]
                 field["enum_values"] = enum_metadata["values"]
             fields.append(field)
             lookup[key] = (dataset, name)

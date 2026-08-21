@@ -97,6 +97,21 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(field["enum_title"], "数字对应的失效保护状态")
         self.assertEqual(meanings, {0: "未启用失效保护", 1: "已启用失效保护"})
 
+    def test_filter_fault_catalog_includes_bitmask_meanings(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("estimator_status", {
+            "timestamp": timestamps,
+            "filter_fault_flags": [0, 1024, 3072],
+        })])
+        topics, _ = build_catalog(log)
+        field = topics[0]["fields"][0]
+        meanings = {item["value"]: item["label"] for item in field["enum_values"]}
+        self.assertEqual(field["enum_title"], "EKF 内部故障位掩码")
+        self.assertEqual(meanings[0], "无 EKF 内部故障")
+        self.assertEqual(meanings[1024], "垂直加速度数据异常")
+        self.assertEqual(meanings[2048], "加速度数据削波或非对称触顶")
+        self.assertIn("3072 = 1024 + 2048", field["enum_note"])
+
     def test_store_queries_range_and_limits_fields(self):
         log = sample_log()
         with tempfile.NamedTemporaryFile(suffix=".ulg", delete=False) as handle:

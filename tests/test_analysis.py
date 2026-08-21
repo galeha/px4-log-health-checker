@@ -107,6 +107,50 @@ class AnalysisRuleTests(unittest.TestCase):
         })])
         self.assertEqual(_vibration(log, 0, 10_000_000)["status"], "severe")
 
+    def test_clipping_uses_all_imu_instances_and_cumulative_increments(self):
+        t = timestamps(4)
+        log = FakeLog([
+            Dataset("vehicle_imu_status", {
+                "timestamp": t,
+                "accel_clipping[0]": [0, 0, 0, 0],
+                "accel_clipping[1]": [0, 0, 0, 0],
+                "accel_clipping[2]": [0, 4, 4, 4],
+            }, multi_id=0),
+            Dataset("vehicle_imu_status", {
+                "timestamp": t,
+                "accel_clipping[0]": [0, 0, 0, 0],
+                "accel_clipping[1]": [0, 0, 0, 0],
+                "accel_clipping[2]": [0, 5, 9, 9],
+            }, multi_id=1),
+        ])
+        result = _vibration(log, 0, 10_000_000)
+        evidence = {item["label"]: item["value"] for item in result["evidence"]}
+        self.assertEqual(evidence["加速度计削波总次数"], "13 次")
+        self.assertEqual(evidence["IMU 0 Z 轴加速度削波"], "4 次")
+        self.assertEqual(evidence["IMU 1 Z 轴加速度削波"], "9 次")
+
+    def test_sensor_accel_fallback_sums_period_counts_and_instances(self):
+        t = timestamps(3)
+        log = FakeLog([
+            Dataset("sensor_accel", {
+                "timestamp": t,
+                "clip_counter[0]": [0, 0, 0],
+                "clip_counter[1]": [0, 0, 0],
+                "clip_counter[2]": [0, 4, 0],
+            }, multi_id=0),
+            Dataset("sensor_accel", {
+                "timestamp": t,
+                "clip_counter[0]": [0, 0, 0],
+                "clip_counter[1]": [0, 0, 0],
+                "clip_counter[2]": [6, 4, 0],
+            }, multi_id=1),
+        ])
+        result = _vibration(log, 0, 10_000_000)
+        evidence = {item["label"]: item["value"] for item in result["evidence"]}
+        self.assertEqual(evidence["加速度计削波总次数"], "14 次")
+        self.assertEqual(evidence["IMU 0 Z 轴加速度削波"], "4 次")
+        self.assertEqual(evidence["IMU 1 Z 轴加速度削波"], "10 次")
+
     def test_vibration_rms_is_reported_per_axis(self):
         t = timestamps(100)
         x = np.tile([-10.0, 10.0], 50)
