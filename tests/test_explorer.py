@@ -115,6 +115,21 @@ class ExplorerTests(unittest.TestCase):
         self.assertIn("filter_fault_flags.bad_acc_vertical", derived)
         self.assertIn("filter_fault_flags.bad_acc_clipping", derived)
 
+    def test_primary_estimator_instance_catalog_explains_zero_based_index(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("estimator_selector_status", {
+            "timestamp": timestamps,
+            "primary_instance": [1, 1, 2],
+        })])
+        topics, _ = build_catalog(log)
+        field = topics[0]["fields"][0]
+        meanings = {item["value"]: item["label"] for item in field["enum_values"]}
+        self.assertEqual(field["enum_title"], "当前主 EKF 实例索引")
+        self.assertEqual(meanings[0], "EKF 索引 0（第一套 EKF）")
+        self.assertEqual(meanings[1], "EKF 索引 1（第二套 EKF）")
+        self.assertEqual(meanings[2], "EKF 索引 2（第三套 EKF）")
+        self.assertIn("索引从 0 开始", field["enum_note"])
+
     def test_filter_fault_derived_curves_decode_each_active_bit(self):
         timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
         log = FakeLog([Dataset("estimator_status", {

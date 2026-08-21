@@ -43,6 +43,11 @@ FAILSAFE_ENUM = {
     1: ("已启用失效保护", "true"),
 }
 
+PRIMARY_EKF_INSTANCE_ENUM = {
+    index: (f"EKF 索引 {index}（第{label}套 EKF）", f"estimator_status[{index}]")
+    for index, label in enumerate(("一", "二", "三", "四", "五", "六", "七", "八", "九"))
+}
+
 FILTER_FAULT_FLAGS = {
     0: ("无 EKF 内部故障", "无故障位"),
     1: ("磁力计 X 轴融合数值错误", "bit 0 · bad_mag_x"),
@@ -76,6 +81,11 @@ FIELD_ENUMS = {
     ),
     ("estimator_status", "filter_fault_flags"): (
         "EKF 内部故障位掩码", FILTER_FAULT_FLAGS, FILTER_FAULT_NOTE, "bitmask",
+    ),
+    ("estimator_selector_status", "primary_instance"): (
+        "当前主 EKF 实例索引", PRIMARY_EKF_INSTANCE_ENUM,
+        "索引从 0 开始：0 是第一套 EKF，1 是第二套，2 是第三套。"
+        "它对应 estimator_status 的 multi_id，不代表固定优先级；实际可用数量请结合 instances_available。",
     ),
 }
 
