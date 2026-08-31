@@ -43,6 +43,17 @@ FAILSAFE_ENUM = {
     1: ("已启用失效保护", "true"),
 }
 
+BATTERY_WARNING_ENUM = {
+    0: ("无电池告警", "BATTERY_WARNING_NONE"),
+    1: ("电量低", "BATTERY_WARNING_LOW"),
+    2: ("电量临界，应立即返航或中止任务", "BATTERY_WARNING_CRITICAL"),
+    3: ("电量紧急，应立即降落", "BATTERY_WARNING_EMERGENCY"),
+    4: ("电池完全失效", "BATTERY_WARNING_FAILED"),
+    6: ("电池不健康或存在故障", "BATTERY_STATE_UNHEALTHY"),
+    7: ("电池正在充电", "BATTERY_STATE_CHARGING"),
+    10: ("电池温度过高", "BATTERY_WARNING_OVER_TEMPERATURE"),
+}
+
 BATTERY_VOLTAGE_MARKERS = {
     0: ("数据未知", "0 V"),
 }
@@ -92,6 +103,12 @@ FIELD_ENUMS = {
     ("vehicle_status", "failsafe"): (
         "数字对应的失效保护状态", FAILSAFE_ENUM,
         "0 表示没有启用失效保护，1 表示已经启用失效保护。",
+    ),
+    ("failsafe_flags", "battery_warning"): (
+        "电池告警等级", BATTERY_WARNING_ENUM,
+        "该值来自所有已连接电池中最严重的 battery_status.warning。飞行器解锁后，PX4 只允许告警等级加重，"
+        "不会因电压短暂恢复而降低。具体失效保护动作还取决于 COM_LOW_BAT_ACT 等参数；"
+        "映射依据本机 PX4 1.15 BatteryStatus 定义。",
     ),
     ("estimator_status", "filter_fault_flags"): (
         "EKF 内部故障位掩码", FILTER_FAULT_FLAGS, FILTER_FAULT_NOTE, "bitmask",

@@ -30,6 +30,7 @@ _EXACT_UNITS = {
     ("sensor_gps", "epv"): "m",
     ("vehicle_gps_position", "eph"): "m",
     ("vehicle_gps_position", "epv"): "m",
+    ("failsafe_flags", "battery_warning"): "告警等级",
     ("vehicle_attitude_setpoint", "roll_body"): "rad",
     ("vehicle_attitude_setpoint", "pitch_body"): "rad",
     ("vehicle_attitude_setpoint", "yaw_body"): "rad",

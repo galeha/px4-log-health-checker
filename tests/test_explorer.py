@@ -120,6 +120,24 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(field["enum_title"], "数字对应的失效保护状态")
         self.assertEqual(meanings, {0: "未启用失效保护", 1: "已启用失效保护"})
 
+    def test_battery_warning_catalog_includes_px4_levels(self):
+        timestamps = np.arange(1_000_000, 5_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("failsafe_flags", {
+            "timestamp": timestamps,
+            "battery_warning": [0, 1, 2, 3],
+        })])
+        topics, _ = build_catalog(log)
+        field = topics[0]["fields"][0]
+        meanings = {item["value"]: item["label"] for item in field["enum_values"]}
+        self.assertEqual(field["enum_title"], "电池告警等级")
+        self.assertEqual(field["unit"], "告警等级")
+        self.assertEqual(meanings[0], "无电池告警")
+        self.assertIn("立即返航", meanings[2])
+        self.assertIn("立即降落", meanings[3])
+        self.assertEqual(meanings[4], "电池完全失效")
+        self.assertEqual(meanings[10], "电池温度过高")
+        self.assertIn("COM_LOW_BAT_ACT", field["enum_note"])
+
     def test_filter_fault_catalog_includes_bitmask_meanings(self):
         timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
         log = FakeLog([Dataset("estimator_status", {
