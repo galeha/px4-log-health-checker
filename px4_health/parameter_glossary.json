@@ -33,6 +33,12 @@
     {"name": "MOT_SLEW_MAX", "zh": "电机输出变化率限制", "unit": "1/s", "note": "限制电机命令变化速度，过小会降低快速响应能力。"},
     {"name": "PWM_MAIN_MIN", "zh": "主输出最小 PWM", "unit": "µs", "note": "传统 PWM 输出的下限。"},
     {"name": "PWM_MAIN_MAX", "zh": "主输出最大 PWM", "unit": "µs", "note": "传统 PWM 输出的上限。"}
+  ],
+  "magnetometer": [
+    {"name": "EKF2_MAG_CHECK", "zh": "EKF 磁场一致性检查", "unit": "位掩码", "note": "决定起飞前和运行中检查磁场强度、磁倾角等项目；为 0 时，磁场受扰状态始终为 0 也不能证明环境正常。"},
+    {"name": "EKF2_MAG_CHK_STR", "zh": "磁场强度检查容差", "unit": "Gauss", "note": "实测磁场强度偏离预期超过该容差时，EKF 可报告磁场受扰。"},
+    {"name": "EKF2_MAG_CHK_INC", "zh": "磁倾角检查容差", "unit": "°", "note": "实测磁倾角与地磁模型差异的允许范围。"},
+    {"name": "EKF2_MAG_TYPE", "zh": "磁力计融合方式", "unit": "枚举", "note": "决定 EKF 如何使用磁力计；不同 PX4 版本的枚举值可能不同，保留日志原始值。"},
+    {"name": "SENS_MAG_MODE", "zh": "多磁力计选择模式", "unit": "枚举", "note": "影响磁力计选择和多传感器工作方式；不同 PX4 版本的具体枚举含义需结合对应固件。"}
   ]
 }
-

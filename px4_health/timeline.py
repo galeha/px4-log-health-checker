@@ -74,6 +74,18 @@ CATEGORY_FIELDS = {
     "system": ["vehicle_status[0].nav_state", "vehicle_status[0].failsafe"],
 }
 
+MAGNETOMETER_FIELDS = [
+    "vehicle_magnetometer[0].magnetometer_ga[0]",
+    "vehicle_magnetometer[0].magnetometer_ga[1]",
+    "vehicle_magnetometer[0].magnetometer_ga[2]",
+    "estimator_status_flags[0].cs_mag_field_disturbed",
+    "estimator_status_flags[0].cs_mag_fault",
+    "estimator_status[0].mag_test_ratio",
+    "battery_status[0].current_a",
+    "battery_status[1].current_a",
+    "actuator_motors[0].control[0]",
+]
+
 
 def _dataset(log, name: str):
     matches = [dataset for dataset in log.data_list if dataset.name == name]
@@ -120,6 +132,8 @@ def _category(text: str) -> str:
 
 def _message_related_fields(message: str, category: str) -> list[str]:
     _, content = _clean_message(message)
+    if any(word in content.lower() for word in ("mag", "magnetic", "compass")):
+        return list(MAGNETOMETER_FIELDS)
     ekf_change = re.match(
         r"^primary EKF changed ([0-9]+) \(filter fault\) -> ([0-9]+)$",
         content,
@@ -257,7 +271,7 @@ def _status_items(log, origin: int) -> tuple[list[dict[str, Any]], dict[str, boo
             topic_timestamps = np.asarray(dataset.data.get("timestamp", []), dtype=np.int64)
             seen_active = bool(len(values) and values[0]) and topic != "failsafe_flags"
             if seen_active and len(topic_timestamps):
-                fields = [f"{topic}[{dataset.multi_id}].{field}"]
+                fields = list(MAGNETOMETER_FIELDS) if field.startswith("cs_mag") else [f"{topic}[{dataset.multi_id}].{field}"]
                 items.append(_item(topic_timestamps[0], origin, active_severity, category,
                                    "日志开始时" + FLAG_TRANSLATIONS[field], f"{field}=1", f"{topic}.{field}", True, fields))
             for timestamp, _before, after in _transitions(dataset, field):
@@ -265,7 +279,7 @@ def _status_items(log, origin: int) -> tuple[list[dict[str, Any]], dict[str, boo
                 if not active and not seen_active:
                     continue
                 title = FLAG_TRANSLATIONS[field] + ("已恢复" if not active else "")
-                fields = [f"{topic}[{dataset.multi_id}].{field}"]
+                fields = list(MAGNETOMETER_FIELDS) if field.startswith("cs_mag") else [f"{topic}[{dataset.multi_id}].{field}"]
                 items.append(_item(timestamp, origin, active_severity if active else "info", category, title,
                                    f"{field}={int(active)}", f"{topic}.{field}", True, fields))
                 seen_active = active

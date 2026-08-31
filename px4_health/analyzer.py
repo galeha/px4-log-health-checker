@@ -11,6 +11,7 @@ from pyulog import ULog
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 RULES = json.loads((PACKAGE_DIR / "rules_v1.json").read_text(encoding="utf-8"))
+MAG_RULES = json.loads((PACKAGE_DIR / "rules_magnetometer_experimental.json").read_text(encoding="utf-8"))
 GLOSSARY = json.loads((PACKAGE_DIR / "parameter_glossary.json").read_text(encoding="utf-8"))
 
 TOPICS = [
@@ -20,15 +21,19 @@ TOPICS = [
     "event",
     "estimator_status",
     "estimator_status_flags",
+    "estimator_selector_status",
     "failsafe_flags",
     "failure_detector_status",
     "sensor_accel",
     "sensor_combined",
     "sensor_gps",
+    "sensor_mag",
+    "sensor_selection",
     "vehicle_gps_position",
     "vehicle_attitude",
     "vehicle_attitude_setpoint",
     "vehicle_land_detected",
+    "vehicle_magnetometer",
     "vehicle_imu_status",
     "vehicle_status",
 ]
@@ -130,12 +135,15 @@ def _multi_series(name: str, unit: str, timestamps: np.ndarray, lines: Iterable[
     }
 
 
-def _evidence(label: str, value: Any, unit: str = "") -> dict[str, str]:
+def _evidence(label: str, value: Any, unit: str = "", full_value: Any | None = None) -> dict[str, str]:
     if isinstance(value, float):
         text = f"{value:.3g}"
     else:
         text = str(value)
-    return {"label": label, "value": f"{text}{(' ' + unit) if unit else ''}"}
+    result = {"label": label, "value": f"{text}{(' ' + unit) if unit else ''}"}
+    if full_value is not None:
+        result["full_value"] = str(full_value)
+    return result
 
 
 def _source(topic: str, field: str, zh: str, unit: str, usage: str) -> dict[str, str]:
@@ -167,6 +175,471 @@ def _unavailable(metric_id: str, name: str, reason: str, log: ULog) -> dict[str,
         "series": [],
         "data_sources": [],
         "parameters": _parameters(log, metric_id),
+    }
+
+
+def _parameter_value(log: ULog, name: str) -> Any:
+    value = (log.initial_parameters or {}).get(name)
+    for item in log.changed_parameters or []:
+        if len(item) >= 3 and item[1] == name:
+            value = item[2]
+    return value
+
+
+def _rank_values(values: np.ndarray) -> np.ndarray:
+    """Return average ranks without requiring scipy."""
+    values = np.asarray(values, dtype=float)
+    order = np.argsort(values, kind="mergesort")
+    sorted_values = values[order]
+    ranks = np.empty(len(values), dtype=float)
+    index = 0
+    while index < len(values):
+        end = index + 1
+        while end < len(values) and sorted_values[end] == sorted_values[index]:
+            end += 1
+        ranks[order[index:end]] = (index + end - 1) / 2.0
+        index = end
+    return ranks
+
+
+def _rank_correlation(left: np.ndarray, right: np.ndarray) -> float:
+    if len(left) < 3 or len(right) != len(left):
+        return math.nan
+    left_rank, right_rank = _rank_values(left), _rank_values(right)
+    if np.ptp(left_rank) <= 0 or np.ptp(right_rank) <= 0:
+        return math.nan
+    return float(np.corrcoef(left_rank, right_rank)[0, 1])
+
+
+def _active_windows(
+    timestamps: np.ndarray, values: np.ndarray, end: int
+) -> list[tuple[int, int, float]]:
+    timestamps = np.asarray(timestamps, dtype=np.int64)
+    values = np.asarray(values).astype(bool)
+    length = min(len(timestamps), len(values))
+    if not length:
+        return []
+    timestamps, values = timestamps[:length], values[:length]
+    order = np.argsort(timestamps)
+    timestamps, values = timestamps[order], values[order]
+    diffs = np.diff(timestamps)
+    positive = diffs[diffs > 0]
+    step = int(np.median(positive)) if positive.size else 0
+    max_gap = max(1_000_000, step * 3) if step else 1_000_000
+    windows: list[tuple[int, int, float]] = []
+    run_start: int | None = None
+    run_end = 0
+    for index, (timestamp, active) in enumerate(zip(timestamps, values)):
+        timestamp = int(timestamp)
+        next_timestamp = int(timestamps[index + 1]) if index + 1 < length else min(end, timestamp + step)
+        sample_end = min(end, timestamp + max(0, min(next_timestamp - timestamp, max_gap)))
+        if active:
+            if run_start is None or timestamp - run_end > max_gap:
+                if run_start is not None:
+                    windows.append((run_start, run_end, max(0.0, (run_end - run_start) / 1e6)))
+                run_start = timestamp
+            run_end = max(timestamp, sample_end)
+        elif run_start is not None:
+            windows.append((run_start, run_end, max(0.0, (run_end - run_start) / 1e6)))
+            run_start = None
+    if run_start is not None:
+        windows.append((run_start, run_end, max(0.0, (run_end - run_start) / 1e6)))
+    return windows
+
+
+def _primary_estimator_field(
+    log: ULog, topic: str, field: str, start: int, end: int
+) -> tuple[np.ndarray, np.ndarray, str]:
+    datasets = sorted((item for item in log.data_list if item.name == topic), key=lambda item: item.multi_id)
+    if not datasets:
+        return np.asarray([]), np.asarray([]), ""
+    selector = _dataset(log, "estimator_selector_status")
+    selector_t, selector_value = _masked(selector, start, end, "primary_instance")
+    chunks = []
+    if len(selector_t) and len(selector_value):
+        selector_t = np.asarray(selector_t, dtype=np.int64)
+        selector_value = np.asarray(selector_value, dtype=int)
+        for dataset in datasets:
+            timestamps, values = _masked(dataset, start, end, field)
+            if not len(timestamps):
+                continue
+            indices = np.searchsorted(selector_t, timestamps, side="right") - 1
+            indices = np.clip(indices, 0, len(selector_value) - 1)
+            active = selector_value[indices] == int(dataset.multi_id)
+            if np.any(active):
+                chunks.append((timestamps[active], values[active]))
+        if chunks:
+            timestamps = np.concatenate([item[0] for item in chunks])
+            values = np.concatenate([item[1] for item in chunks])
+            order = np.argsort(timestamps)
+            return timestamps[order], values[order], f"{topic}[当前主 EKF]"
+    fallback = next((item for item in datasets if item.multi_id == 0), max(datasets, key=lambda item: len(item.data.get("timestamp", []))))
+    timestamps, values = _masked(fallback, start, end, field)
+    return timestamps, values, f"{topic}[{fallback.multi_id}]"
+
+
+def _magnetic_vector(
+    log: ULog, start: int, end: int
+) -> tuple[np.ndarray, np.ndarray, str, str, list[str]]:
+    notes: list[str] = []
+    vehicle_datasets = [item for item in log.data_list if item.name == "vehicle_magnetometer"]
+    vehicle = max(vehicle_datasets, key=lambda item: len(item.data.get("timestamp", []))) if vehicle_datasets else None
+    if vehicle is not None:
+        timestamps = np.asarray(vehicle.data.get("timestamp", []), dtype=np.int64)
+        axes = [_field(vehicle, f"magnetometer_ga[{axis}]") for axis in range(3)]
+        if len(timestamps) and all(axis is not None and len(axis) == len(timestamps) for axis in axes):
+            matrix = np.column_stack(axes).astype(float)
+            mask = (timestamps >= start) & (timestamps <= end) & np.all(np.isfinite(matrix), axis=1)
+            return timestamps[mask], matrix[mask], f"vehicle_magnetometer[{vehicle.multi_id}]", "高", notes
+
+    sensors = [item for item in log.data_list if item.name == "sensor_mag"]
+    usable = [item for item in sensors if all(_field(item, field) is not None for field in ("x", "y", "z"))]
+    if not usable:
+        return np.asarray([]), np.empty((0, 3)), "", "无", ["日志没有可用的磁力计三轴数据。"]
+
+    selected_device = None
+    selection = _dataset(log, "sensor_selection")
+    _, selected_values = _masked(selection, start, end, "mag_device_id")
+    selected_clean = _finite(selected_values)
+    selected_clean = selected_clean[selected_clean > 0]
+    if selected_clean.size:
+        values, counts = np.unique(selected_clean.astype(np.int64), return_counts=True)
+        selected_device = int(values[np.argmax(counts)])
+
+    chosen = None
+    if selected_device is not None:
+        for dataset in usable:
+            _, device_values = _masked(dataset, start, end, "device_id")
+            clean = _finite(device_values)
+            if clean.size and int(round(_percentile(clean, 50))) == selected_device:
+                chosen = dataset
+                break
+    confidence = "中"
+    if chosen is None and len(usable) == 1:
+        chosen = usable[0]
+        notes.append("缺少校准后的 vehicle_magnetometer，已回退到唯一的 sensor_mag 实例。")
+    elif chosen is None:
+        chosen = max(usable, key=lambda item: len(item.data.get("timestamp", [])))
+        confidence = "低"
+        notes.append("无法确认多个原始磁力计中的主传感器，已使用样本最多的实例，结论可信度降低。")
+    else:
+        notes.append("缺少校准后的 vehicle_magnetometer，已按 sensor_selection 选择原始 sensor_mag。")
+
+    timestamps = np.asarray(chosen.data.get("timestamp", []), dtype=np.int64)
+    matrix = np.column_stack([_field(chosen, field) for field in ("x", "y", "z")]).astype(float)
+    mask = (timestamps >= start) & (timestamps <= end) & np.all(np.isfinite(matrix), axis=1)
+    return timestamps[mask], matrix[mask], f"sensor_mag[{chosen.multi_id}]", confidence, notes
+
+
+def _load_statistics(
+    mag_timestamps: np.ndarray, mag_norm: np.ndarray, load_timestamps: np.ndarray, load_values: np.ndarray
+) -> dict[str, float] | None:
+    load_timestamps = np.asarray(load_timestamps, dtype=np.int64)
+    load_values = np.asarray(load_values, dtype=float)
+    valid = np.isfinite(load_values)
+    load_timestamps, load_values = load_timestamps[valid], load_values[valid]
+    if len(load_values) < 20:
+        return None
+    order = np.argsort(load_timestamps)
+    load_timestamps, load_values = load_timestamps[order], load_values[order]
+    overlap = (mag_timestamps >= load_timestamps[0]) & (mag_timestamps <= load_timestamps[-1])
+    if np.count_nonzero(overlap) < max(20, int(len(mag_timestamps) * 0.5)):
+        return None
+    magnetic = np.asarray(mag_norm, dtype=float)[overlap]
+    aligned_load = np.interp(mag_timestamps[overlap], load_timestamps, load_values)
+    low_limit, high_limit = np.percentile(aligned_load, (20, 80))
+    low, high = aligned_load <= low_limit, aligned_load >= high_limit
+    if np.count_nonzero(low) < 5 or np.count_nonzero(high) < 5:
+        return None
+    delta = float(np.median(magnetic[high]) - np.median(magnetic[low]))
+    return {
+        "delta_ga": delta,
+        "correlation": _rank_correlation(magnetic, aligned_load),
+        "aligned_samples": float(len(magnetic)),
+    }
+
+
+def _select_power_load(
+    log: ULog, start: int, end: int, mag_timestamps: np.ndarray, mag_norm: np.ndarray
+) -> dict[str, Any] | None:
+    current_candidates = []
+    for battery in (item for item in log.data_list if item.name == "battery_status"):
+        timestamps, current = _masked(battery, start, end, "current_a")
+        current = np.asarray(current, dtype=float)
+        valid = np.isfinite(current) & (current >= 0)
+        timestamps, current = timestamps[valid], current[valid]
+        if len(current) < 30:
+            continue
+        span = _percentile(current, 90) - _percentile(current, 10)
+        if span < MAG_RULES["current_minimum_span_a"]:
+            continue
+        statistics = _load_statistics(mag_timestamps, mag_norm, timestamps, current)
+        if statistics:
+            current_candidates.append({
+                "kind": "current", "confidence": "高", "timestamps": timestamps, "values": current,
+                "source": f"battery_status[{battery.multi_id}].current_a", "label": f"动力电流（电池实例 {battery.multi_id}）",
+                "unit": "A", "span": float(span), **statistics,
+            })
+    if current_candidates:
+        return max(current_candidates, key=lambda item: item["span"])
+
+    motors = _dataset(log, "actuator_motors")
+    timestamps = _field(motors, "timestamp")
+    if motors is None or timestamps is None:
+        return None
+    timestamps = np.asarray(timestamps, dtype=np.int64)
+    columns = []
+    for index in range(16):
+        values = _field(motors, f"control[{index}]")
+        if values is not None and len(values) == len(timestamps):
+            columns.append(np.asarray(values, dtype=float))
+    if not columns:
+        return None
+    matrix = np.column_stack(columns)
+    mask = (timestamps >= start) & (timestamps <= end)
+    timestamps, matrix = timestamps[mask], matrix[mask]
+    valid = np.isfinite(matrix) & (matrix >= 0) & (matrix <= 1.0)
+    active_columns = np.any(valid, axis=0)
+    matrix, valid = matrix[:, active_columns], valid[:, active_columns]
+    if not matrix.size:
+        return None
+    counts = np.sum(valid, axis=1)
+    row_valid = counts > 0
+    load = np.sum(np.where(valid, matrix, 0.0), axis=1)[row_valid] / counts[row_valid]
+    timestamps = timestamps[row_valid]
+    if len(load) < 30:
+        return None
+    span = _percentile(load, 90) - _percentile(load, 10)
+    if span < MAG_RULES["motor_minimum_span"]:
+        return None
+    statistics = _load_statistics(mag_timestamps, mag_norm, timestamps, load)
+    if not statistics:
+        return None
+    return {
+        "kind": "motor", "confidence": "低", "timestamps": timestamps, "values": load,
+        "source": "actuator_motors[0].control[有效通道]", "label": "平均电机输出（负载代理）",
+        "unit": "归一化", "span": float(span), **statistics,
+    }
+
+
+def _magnetometer_unavailable(log: ULog, reason: str, quality: dict[str, Any] | None = None) -> dict[str, Any]:
+    result = _unavailable("magnetometer", "磁力计与动力干扰（实验）", reason, log)
+    result.update({
+        "experimental": True,
+        "affects_overall": False,
+        "experimental_rule_version": MAG_RULES["version"],
+        "power_relation": "无法判断",
+        "rule_hits": [],
+        "data_quality": quality or {"notes": [reason]},
+        "anomaly_windows": [],
+    })
+    return result
+
+
+def _magnetometer(log: ULog, start: int, end: int) -> dict[str, Any]:
+    timestamps, matrix, magnetic_source, source_confidence, notes = _magnetic_vector(log, start, end)
+    if not len(timestamps):
+        return _magnetometer_unavailable(log, "日志缺少可用的磁力计三轴数据。")
+    magnetic_norm = np.linalg.norm(matrix, axis=1)
+    duration_s = max(0.0, (int(timestamps[-1]) - int(timestamps[0])) / 1e6)
+    flight_duration_s = max(1e-9, (end - start) / 1e6)
+    coverage = min(1.0, duration_s / flight_duration_s)
+    positive_diffs = np.diff(timestamps)
+    positive_diffs = positive_diffs[positive_diffs > 0]
+    sample_rate = float(1e6 / np.median(positive_diffs)) if positive_diffs.size else math.nan
+    quality = {
+        "coverage_percent": round(coverage * 100, 1),
+        "sample_rate_hz": round(sample_rate, 2) if math.isfinite(sample_rate) else None,
+        "source": magnetic_source,
+        "confidence": source_confidence,
+        "notes": notes,
+    }
+    missing = []
+    if len(timestamps) < MAG_RULES["minimum_samples"]:
+        missing.append(f"有效磁场样本少于 {MAG_RULES['minimum_samples']} 个")
+    if duration_s < MAG_RULES["minimum_duration_s"]:
+        missing.append(f"磁场数据持续时间少于 {MAG_RULES['minimum_duration_s']:.0f} 秒")
+    if coverage < MAG_RULES["minimum_coverage_fraction"]:
+        missing.append(f"磁场数据覆盖率低于 {MAG_RULES['minimum_coverage_fraction'] * 100:.0f}%")
+    if missing:
+        quality["notes"].extend(missing)
+        return _magnetometer_unavailable(log, "；".join(missing) + "。", quality)
+
+    field_median = _percentile(magnetic_norm, 50)
+    field_span = _percentile(magnetic_norm, 95) - _percentile(magnetic_norm, 5)
+    disturbed_t, disturbed_values, disturbed_source = _primary_estimator_field(
+        log, "estimator_status_flags", "cs_mag_field_disturbed", start, end
+    )
+    fault_t, fault_values, fault_source = _primary_estimator_field(
+        log, "estimator_status_flags", "cs_mag_fault", start, end
+    )
+    ratio_t, ratio_values, ratio_source = _primary_estimator_field(
+        log, "estimator_status", "mag_test_ratio", start, end
+    )
+    filter_t, filter_values, filter_source = _primary_estimator_field(
+        log, "estimator_status", "filter_fault_flags", start, end
+    )
+
+    mag_check_value = _parameter_value(log, "EKF2_MAG_CHECK")
+    mag_check_disabled = mag_check_value is not None and int(mag_check_value) == 0
+    disturbed_windows = _active_windows(disturbed_t, np.asarray(disturbed_values) > 0, end)
+    disturbed_duration = sum(item[2] for item in disturbed_windows)
+    disturbed_fraction = min(1.0, disturbed_duration / flight_duration_s)
+    disturbed_longest = max((item[2] for item in disturbed_windows), default=0.0)
+    fault_active = bool(len(fault_values) and np.any(np.asarray(fault_values) > 0))
+    filter_clean = _finite(filter_values).astype(np.int64)
+    magnetic_filter_fault = bool(filter_clean.size and np.any((filter_clean & 31) != 0))
+    mag_test_p95 = _percentile(ratio_values, 95)
+
+    if mag_check_disabled:
+        quality["notes"].append("EKF2_MAG_CHECK=0，未使用 cs_mag_field_disturbed=0 作为正常证据。")
+    elif mag_check_value is None:
+        quality["notes"].append("日志未记录 EKF2_MAG_CHECK，无法确认启用了哪些磁场一致性检查。")
+    if not len(disturbed_values):
+        quality["notes"].append("日志未记录主 EKF 的 cs_mag_field_disturbed。")
+
+    load = _select_power_load(log, start, end, timestamps, magnetic_norm)
+    power_relation = "无法判断"
+    load_rank = 0
+    if load:
+        quality["load_source"] = load["source"]
+        quality["load_confidence"] = load["confidence"]
+        delta = abs(float(load["delta_ga"]))
+        correlation = abs(float(load["correlation"])) if math.isfinite(load["correlation"]) else math.nan
+        if load["kind"] == "current":
+            severe_delta, warning_delta = MAG_RULES["current_delta_severe_ga"], MAG_RULES["current_delta_warning_ga"]
+            severe_corr, warning_corr = MAG_RULES["current_correlation_severe"], MAG_RULES["current_correlation_warning"]
+        else:
+            severe_delta, warning_delta = MAG_RULES["motor_delta_severe_ga"], MAG_RULES["motor_delta_warning_ga"]
+            severe_corr, warning_corr = MAG_RULES["motor_correlation_severe"], MAG_RULES["motor_correlation_warning"]
+            quality["notes"].append("没有找到可靠动力电流，使用电机平均输出作为低可信度负载代理，非实测电流。")
+        if math.isfinite(correlation) and delta >= severe_delta and correlation >= severe_corr:
+            load_rank, power_relation = 2, "明显"
+        elif math.isfinite(correlation) and delta >= warning_delta and correlation >= warning_corr:
+            load_rank, power_relation = 1, "疑似"
+        else:
+            power_relation = "未发现"
+    else:
+        quality["notes"].append("没有足够变化的动力电流或电机输出，无法判断磁场是否随动力负载变化。")
+
+    rank = load_rank
+    hits: list[str] = []
+    if field_span >= MAG_RULES["field_span_severe_ga"]:
+        rank = 2
+        hits.append(f"磁场模长 P95-P5 为 {field_span:.3f} G，达到严重阈值")
+    elif field_span >= MAG_RULES["field_span_warning_ga"]:
+        rank = max(rank, 1)
+        hits.append(f"磁场模长 P95-P5 为 {field_span:.3f} G，达到提醒阈值")
+    if fault_active:
+        rank = 2
+        hits.append("主 EKF 已将磁力计判定为故障")
+    if magnetic_filter_fault:
+        rank = 2
+        hits.append("主 EKF 的 filter_fault_flags 包含磁力计或航向融合故障位")
+    if not mag_check_disabled:
+        if disturbed_fraction >= MAG_RULES["disturbed_fraction_severe"] or disturbed_longest >= MAG_RULES["disturbed_continuous_severe_s"]:
+            rank = 2
+            hits.append(f"EKF 磁场受扰最长连续 {disturbed_longest:.2f} s，占飞行阶段 {disturbed_fraction * 100:.1f}%")
+        elif disturbed_longest >= MAG_RULES["disturbed_continuous_warning_s"]:
+            rank = max(rank, 1)
+            hits.append(f"EKF 磁场受扰最长连续 {disturbed_longest:.2f} s")
+    if math.isfinite(mag_test_p95) and mag_test_p95 >= MAG_RULES["mag_test_ratio_warning"]:
+        rank = max(rank, 1)
+        hits.append(f"磁力计创新检验比 P95 为 {mag_test_p95:.2f}，达到 1")
+    if load_rank:
+        hits.append(
+            f"磁场模长与{'动力电流' if load['kind'] == 'current' else '电机输出代理'}的关联达到"
+            f"{'严重' if load_rank == 2 else '提醒'}条件"
+        )
+
+    labels = ("未见明显异常", "存在磁场异常", "严重磁场异常")
+    if rank and power_relation in {"明显", "疑似"}:
+        summary = f"检测到{'严重' if rank == 2 else ''}磁场异常，动力关联：{power_relation}"
+    elif rank:
+        summary = "检测到磁场异常，但尚不能确认由动力系统引起"
+    elif power_relation == "无法判断":
+        summary = "未发现明显磁场异常；当前日志无法判断动力关联"
+    else:
+        summary = "未发现明显磁场异常或随动力负载变化的证据"
+
+    evidence = [
+        _evidence("磁场模长中位数", field_median, "G"),
+        _evidence("磁场模长 P95-P5", field_span, "G"),
+        _evidence("动力关联", power_relation),
+        _evidence("EKF 磁场受扰占比", disturbed_fraction * 100, "%"),
+        _evidence("最长连续磁场受扰", disturbed_longest, "s"),
+    ]
+    if math.isfinite(mag_test_p95):
+        evidence.append(_evidence("磁力计创新检验比 P95", mag_test_p95))
+    evidence.extend([
+        _evidence("EKF 磁力计故障", "是" if fault_active else "否"),
+        _evidence("磁场相关融合故障位", "有" if magnetic_filter_fault else "无"),
+    ])
+    if load:
+        evidence.extend([
+            _evidence("动力负载数据源", load["source"], full_value=load["source"]),
+            _evidence("动力关联可信度", load["confidence"]),
+            _evidence("高低负载磁场模长差", abs(float(load["delta_ga"])), "G"),
+            _evidence("磁场-负载秩相关系数 ρ", float(load["correlation"])),
+        ])
+
+    series = [_series("磁场模长", "G", timestamps, magnetic_norm, log.start_timestamp)]
+    if load:
+        series.append(_series(load["label"], load["unit"], load["timestamps"], load["values"], log.start_timestamp))
+    if len(disturbed_values):
+        series.append(_series("EKF 磁场受扰状态", "状态（0/1）", disturbed_t, disturbed_values, log.start_timestamp))
+
+    sources = [_source(
+        magnetic_source,
+        "magnetometer_ga[0..2]" if magnetic_source.startswith("vehicle_magnetometer") else "x / y / z",
+        "磁力计三轴磁场及派生模长", "Gauss",
+        "计算 sqrt(X²+Y²+Z²)，减少机体姿态旋转对单轴曲线的影响。",
+    )]
+    if load:
+        sources.append(_source(
+            load["source"].rsplit(".", 1)[0], load["source"].rsplit(".", 1)[-1],
+            "动力电流" if load["kind"] == "current" else "电机平均输出负载代理", load["unit"],
+            "比较低负载 P20 与高负载 P80 的磁场模长，并计算秩相关性。",
+        ))
+    if len(disturbed_values):
+        sources.append(_source(disturbed_source, "cs_mag_field_disturbed", "EKF 磁场受扰状态", "0/1", "统计受扰占比、连续时长和异常时间段。"))
+    if len(fault_values):
+        sources.append(_source(fault_source, "cs_mag_fault", "EKF 磁力计故障状态", "0/1", "检查当前主 EKF 是否已停止使用故障磁力计。"))
+    if len(ratio_values):
+        sources.append(_source(ratio_source, "mag_test_ratio", "磁力计创新检验比", "比值", "P95 达到 1 表示磁力计创新曾达到融合检验门限。"))
+    if len(filter_values):
+        sources.append(_source(filter_source, "filter_fault_flags", "EKF 内部故障位掩码", "位掩码", "检查低 5 位的磁力计和航向融合数值故障。"))
+
+    anomaly_windows = []
+    for window_start, window_end, window_duration in disturbed_windows:
+        if window_duration < MAG_RULES["disturbed_continuous_warning_s"]:
+            continue
+        severity = "severe" if window_duration >= MAG_RULES["disturbed_continuous_severe_s"] else "warning"
+        anomaly_windows.append({
+            "start_s": round((window_start - log.start_timestamp) / 1e6, 3),
+            "end_s": round((window_end - log.start_timestamp) / 1e6, 3),
+            "label": "EKF 持续报告磁场受扰", "severity": severity,
+        })
+    if rank and not anomaly_windows:
+        anomaly_windows.append({
+            "start_s": round((start - log.start_timestamp) / 1e6, 3),
+            "end_s": round((end - log.start_timestamp) / 1e6, 3),
+            "label": "磁场统计异常分析段", "severity": _status(rank),
+        })
+
+    return {
+        "id": "magnetometer", "name": "磁力计与动力干扰（实验）", "status": _status(rank), "label": labels[rank],
+        "summary": summary,
+        "details": [
+            "磁场模长由三轴磁场计算，比单独观察 X/Y/Z 更不容易把姿态旋转误判为干扰。",
+            "磁场异常只能说明磁环境或传感器存在问题；只有它随电流或电机输出同步变化时，才提示疑似动力相关。",
+            "电机输出是低可信度负载代理，不等同于实测动力电流；孤立尖峰不会单独触发严重等级。",
+            "该指标属于实验规则，不参与顶部总评。",
+        ],
+        "evidence": evidence, "series": series, "data_sources": sources, "parameters": _parameters(log, "magnetometer"),
+        "experimental": True, "affects_overall": False, "experimental_rule_version": MAG_RULES["version"],
+        "power_relation": power_relation, "rule_hits": hits or ["未触发实验规则的提醒或严重条件。"],
+        "data_quality": quality, "anomaly_windows": anomaly_windows,
     }
 
 
@@ -597,6 +1070,22 @@ def _vehicle_type(log: ULog) -> tuple[str, bool]:
     return "未记录", True
 
 
+def _overall_summary(metrics: list[dict[str, Any]]) -> str:
+    status_rank = {"normal": 0, "unavailable": 0, "warning": 1, "severe": 2}
+    official_metrics = [item for item in metrics if item.get("affects_overall", True)]
+    overall_rank = max((status_rank[item["status"]] for item in official_metrics), default=0)
+    unavailable_count = sum(item["status"] == "unavailable" for item in official_metrics)
+    if overall_rank == 2:
+        return "存在严重风险项目"
+    if overall_rank == 1:
+        return "存在需要关注的项目"
+    if unavailable_count == len(official_metrics):
+        return "数据不足，无法完成飞行检查"
+    if unavailable_count:
+        return "已完成部分检查，部分数据不足"
+    return "未发现明显异常"
+
+
 def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str, Any]:
     path = Path(path)
     try:
@@ -618,20 +1107,32 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
         (_battery, "battery", "电池压降"),
         (_attitude, "attitude", "姿态跟踪"),
         (_motors, "motors", "电机输出余量"),
+        (_magnetometer, "magnetometer", "磁力计与动力干扰（实验）"),
     )
     for function, metric_id, name in analyzers:
         if not has_flight:
-            metrics.append(_unavailable(metric_id, name, "未检测到有效飞行阶段，不能给出飞行健康结论。", log))
+            if metric_id == "magnetometer":
+                metrics.append(_magnetometer_unavailable(log, "未检测到有效飞行阶段，不能分析磁力计与动力负载的关系。"))
+            else:
+                metrics.append(_unavailable(metric_id, name, "未检测到有效飞行阶段，不能给出飞行健康结论。", log))
             continue
         try:
             metrics.append(function(log, start, end))
         except Exception as exc:
-            metrics.append(_unavailable(metric_id, name, f"该项计算失败：{exc}", log))
+            if metric_id == "magnetometer":
+                metrics.append(_magnetometer_unavailable(log, f"该项计算失败：{exc}"))
+            else:
+                metrics.append(_unavailable(metric_id, name, f"该项计算失败：{exc}", log))
     from .candidate_v2 import RULES as CANDIDATE_RULES, analyze_candidate_v2
     candidate_metrics = analyze_candidate_v2(log, start, end, metrics, has_flight)
     for metric in metrics:
         candidate = candidate_metrics.get(metric["id"])
         metric["candidate_v2"] = candidate
+        if metric.get("experimental"):
+            metric.setdefault("rule_hits", [])
+            metric.setdefault("data_quality", {})
+            metric.setdefault("anomaly_windows", [])
+            continue
         if metric["status"] == "unavailable":
             metric["rule_hits"] = []
         elif metric["status"] == "normal":
@@ -640,19 +1141,7 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
             metric["rule_hits"] = [metric["summary"]]
         metric["data_quality"] = candidate.get("data_quality", {}) if candidate else {}
         metric["anomaly_windows"] = candidate.get("anomaly_windows", []) if candidate else []
-    status_rank = {"normal": 0, "unavailable": 0, "warning": 1, "severe": 2}
-    overall_rank = max((status_rank[item["status"]] for item in metrics), default=0)
-    unavailable_count = sum(item["status"] == "unavailable" for item in metrics)
-    if overall_rank == 2:
-        overall = "存在严重风险项目"
-    elif overall_rank == 1:
-        overall = "存在需要关注的项目"
-    elif unavailable_count == len(metrics):
-        overall = "数据不足，无法完成飞行检查"
-    elif unavailable_count:
-        overall = "已完成部分检查，部分数据不足"
-    else:
-        overall = "未发现明显异常"
+    overall = _overall_summary(metrics)
     return {
         "meta": {
             "filename": display_name or path.name,
@@ -664,6 +1153,7 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
             "rule_version": RULES["version"],
             "algorithm_version": "v1.0.0",
             "candidate_algorithm_version": CANDIDATE_RULES["version"],
+            "experimental_rule_versions": {"magnetometer": MAG_RULES["version"]},
         },
         "overall": overall,
         "timeline": timeline,

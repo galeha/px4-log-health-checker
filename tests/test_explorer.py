@@ -218,6 +218,21 @@ class ExplorerTests(unittest.TestCase):
         self.assertIn("cs_mag_fault=1", field["enum_note"])
         self.assertIn("EKF2_MAG_CHECK", field["enum_note"])
 
+    def test_magnetometer_fault_and_test_ratio_include_chinese_help(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([
+            Dataset("estimator_status_flags", {"timestamp": timestamps, "cs_mag_fault": [0, 1, 0]}),
+            Dataset("estimator_status", {"timestamp": timestamps, "mag_test_ratio": [0.2, 1.1, 0.4]}),
+        ])
+        topics, _ = build_catalog(log)
+        fields = {(topic["name"], field["name"]): field for topic in topics for field in topic["fields"]}
+        fault = fields[("estimator_status_flags", "cs_mag_fault")]
+        ratio = fields[("estimator_status", "mag_test_ratio")]
+        self.assertEqual(fault["unit"], "状态（0/1）")
+        self.assertIn("停止使用", fault["enum_note"])
+        self.assertEqual(ratio["unit"], "比值")
+        self.assertIn("达到或超过 1", ratio["enum_note"])
+
     def test_primary_estimator_instance_catalog_explains_zero_based_index(self):
         timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
         log = FakeLog([Dataset("estimator_selector_status", {

@@ -48,6 +48,19 @@ MAG_FIELD_DISTURBED_ENUM = {
     1: ("检测到磁场受扰", "true"),
 }
 
+MAG_FAULT_ENUM = {
+    0: ("磁力计未被 EKF 判定为故障", "false"),
+    1: ("磁力计已被 EKF 判定为故障并停止使用", "true"),
+}
+
+MAG_TEST_RATIO_MARKERS = {
+    1: ("达到磁力计融合检验门限", "1"),
+}
+
+MAG_DEVICE_ID_MARKERS = {
+    0: ("未选择磁力计或设备 ID 未知", "0"),
+}
+
 BATTERY_WARNING_ENUM = {
     0: ("无电池告警", "BATTERY_WARNING_NONE"),
     1: ("电量低", "BATTERY_WARNING_LOW"),
@@ -136,6 +149,22 @@ FIELD_ENUMS = {
         "都可能导致该状态，并可能使 EKF 暂停使用磁力计融合；它不等同于磁力计硬件已经损坏。"
         "cs_mag_fault=1 才表示磁力计已被判定故障且不再使用。若 EKF2_MAG_CHECK 关闭或对应检查未启用，"
         "该字段为 0 也不能单独证明磁场环境一定正常。映射依据本机 PX4 1.15 EKF 定义。",
+    ),
+    ("estimator_status_flags", "cs_mag_fault"): (
+        "EKF 磁力计故障状态", MAG_FAULT_ENUM,
+        "0 表示当前没有把磁力计判定为故障；1 表示 EKF 已将磁力计判定为故障并停止使用。"
+        "它比 cs_mag_field_disturbed 更严重，但仍需结合主 EKF 实例和故障发生时间判断。",
+    ),
+    ("estimator_status", "mag_test_ratio"): (
+        "磁力计创新检验比", MAG_TEST_RATIO_MARKERS,
+        "这是连续比值，不是单选枚举：小于 1 通常表示创新处于融合门限内，达到或超过 1 表示达到门限。"
+        "磁力计融合暂停时该值可能为 0，因此还需结合 cs_mag_field_disturbed 和 cs_mag_fault。",
+        "annotation",
+    ),
+    ("sensor_selection", "mag_device_id"): (
+        "当前选中磁力计的设备 ID", MAG_DEVICE_ID_MARKERS,
+        "非零值是 PX4 设备标识，不是磁力计序号；需要与 sensor_mag.device_id 对照，才能确认当前使用哪个实例。",
+        "annotation",
     ),
     ("estimator_selector_status", "primary_instance"): (
         "当前主 EKF 实例索引", PRIMARY_EKF_INSTANCE_ENUM,

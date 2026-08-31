@@ -11,6 +11,75 @@ const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
   .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
+let evidenceTooltipOwner = null;
+
+function evidenceFloatingTooltip() {
+  let tooltip = document.querySelector("#evidenceFloatingTooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = "evidenceFloatingTooltip";
+    tooltip.className = "evidence-floating-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    document.body.appendChild(tooltip);
+  }
+  return tooltip;
+}
+
+function positionEvidenceTooltip(owner, tooltip) {
+  const ownerRect = owner.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const gap = 9;
+  const edge = 10;
+  const left = Math.min(
+    Math.max(ownerRect.left, edge),
+    Math.max(edge, window.innerWidth - tooltipRect.width - edge),
+  );
+  const above = ownerRect.top - tooltipRect.height - gap;
+  const top = above >= edge ? above : ownerRect.bottom + gap;
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
+function showEvidenceTooltip(owner) {
+  const fullValue = owner.dataset.fullValue;
+  if (!fullValue) return;
+  const tooltip = evidenceFloatingTooltip();
+  evidenceTooltipOwner = owner;
+  tooltip.textContent = fullValue;
+  tooltip.classList.add("visible");
+  positionEvidenceTooltip(owner, tooltip);
+}
+
+function hideEvidenceTooltip(owner) {
+  if (owner && evidenceTooltipOwner !== owner) return;
+  evidenceTooltipOwner = null;
+  document.querySelector("#evidenceFloatingTooltip")?.classList.remove("visible");
+}
+
+document.addEventListener("mouseover", (event) => {
+  const owner = event.target.closest?.(".evidence-value-wrap");
+  if (!owner || owner.contains(event.relatedTarget)) return;
+  showEvidenceTooltip(owner);
+});
+
+document.addEventListener("mouseout", (event) => {
+  const owner = event.target.closest?.(".evidence-value-wrap");
+  if (!owner || owner.contains(event.relatedTarget)) return;
+  hideEvidenceTooltip(owner);
+});
+
+document.addEventListener("focusin", (event) => {
+  const owner = event.target.closest?.(".evidence-value-wrap");
+  if (owner) showEvidenceTooltip(owner);
+});
+
+document.addEventListener("focusout", (event) => {
+  const owner = event.target.closest?.(".evidence-value-wrap");
+  if (owner) hideEvidenceTooltip(owner);
+});
+
+window.addEventListener("scroll", () => hideEvidenceTooltip(), true);
+
 function showOnly(target) {
   [uploadPanel, progressPanel, errorPanel, results].forEach((element) => element.classList.add("hidden"));
   target.classList.remove("hidden");
@@ -46,7 +115,7 @@ async function analyze(file) {
   }
   showOnly(progressPanel);
   $("#progressTitle").textContent = `正在分析 ${file.name}`;
-  $("#progressText").textContent = "正在识别飞行阶段、计算五项健康指标…";
+  $("#progressText").textContent = "正在识别飞行阶段、计算五项正式指标和磁力计实验指标…";
   try {
     const response = await fetch("/api/analyze", {
       method: "POST",
@@ -77,16 +146,22 @@ function renderResults(data) {
     ["分析时段", `${data.meta.flight_duration_s} 秒`],
     ["规则 / 算法", `${data.meta.rule_version} / ${data.meta.algorithm_version || "v1"}`],
   ];
+  if (data.meta.experimental_rule_versions?.magnetometer) {
+    meta.push(["磁力计实验规则", data.meta.experimental_rule_versions.magnetometer]);
+  }
   $("#metaGrid").innerHTML = meta.map(([label, value]) =>
     `<div class="meta-item"><span>${escapeHtml(label)}</span><div class="meta-value"><strong>${escapeHtml(value)}</strong></div></div>`
   ).join("");
   $("#metricGrid").innerHTML = data.metrics.map((metric, index) => metricCard(metric, index)).join("");
   document.querySelectorAll(".metric-summary").forEach((button) => button.addEventListener("click", () => {
-    button.closest(".metric-card").classList.toggle("open");
+    const card = button.closest(".metric-card");
+    card.classList.toggle("open");
+    if (card.classList.contains("open")) requestAnimationFrame(() => updateAnomalyWindowControls(card));
   }));
   initExplorer(data.explorer);
   renderTimeline(data.timeline);
   document.querySelectorAll("[data-anomaly-start]").forEach((button) => button.addEventListener("click", jumpToAnomaly));
+  document.querySelectorAll("[data-anomaly-more]").forEach((button) => button.addEventListener("click", toggleAnomalyWindows));
   showOnly(results);
   results.scrollIntoView({behavior: "smooth", block: "start"});
 }
@@ -226,6 +301,7 @@ const metricLevels = {
   "battery": ["正常", "明显", "严重", "数据不足"],
   "attitude": ["良好", "偏差较大", "严重偏差", "数据不足"],
   "motors": ["正常", "接近饱和", "饱和风险高", "数据不足"],
+  "magnetometer": ["未见明显异常", "存在磁场异常", "严重磁场异常", "数据不足"],
 };
 
 function formatEvidenceLabel(label) {
@@ -242,7 +318,7 @@ function formatEvidenceLabel(label) {
 
 function metricCard(metric, index) {
   const evidence = metric.evidence.length
-    ? `<div class="evidence-grid">${metric.evidence.map((item) => `<div class="evidence ${escapeHtml(item.status || "")}"><span class="evidence-label">${formatEvidenceLabel(item.label)}</span><strong>${escapeHtml(item.value)}</strong>${item.result ? `<em>${escapeHtml(item.result)}</em>` : ""}</div>`).join("")}</div>`
+    ? `<div class="evidence-grid">${metric.evidence.map((item) => { const fullValue = item.full_value || item.value; return `<div class="evidence ${escapeHtml(item.status || "")}"><span class="evidence-label">${formatEvidenceLabel(item.label)}</span><span class="evidence-value-wrap" tabindex="0" data-full-value="${escapeHtml(fullValue)}" aria-label="${escapeHtml(fullValue)}"><strong class="evidence-value">${escapeHtml(item.value)}</strong></span>${item.result ? `<em>${escapeHtml(item.result)}</em>` : ""}</div>`; }).join("")}</div>`
     : "";
   const notes = detailHelp(metric.details || []);
   const sources = sourceSection(metric.data_sources || []);
@@ -252,7 +328,7 @@ function metricCard(metric, index) {
   return `<article class="metric-card ${escapeHtml(metric.status)}">
     <button class="metric-summary" type="button" aria-label="展开${escapeHtml(metric.name)}详情">
       <span class="metric-number">0${index + 1}</span>
-      <span class="metric-name">${escapeHtml(metric.name)}</span>
+      <span class="metric-name">${escapeHtml(metric.name)}${metric.experimental ? `<em class="experimental-badge">不影响总评</em>` : ""}</span>
       <span class="status-pill">${escapeHtml(metric.label)}<span class="status-tooltip" role="tooltip"><strong>全部判断等级</strong><span>${(metricLevels[metric.id] || ["正常", "提醒", "严重", "数据不足"]).map(escapeHtml).join("　/　")}</span></span></span>
       <span class="metric-brief">${escapeHtml(metric.summary)}</span>
       <span class="chevron">⌄</span>
@@ -266,7 +342,10 @@ function explainabilitySection(metric) {
   const qualityItems = [];
   if (quality.coverage_percent !== undefined) qualityItems.push(["有效覆盖率", `${quality.coverage_percent}%`]);
   if (quality.sample_rate_hz !== undefined && quality.sample_rate_hz !== null) qualityItems.push(["采样率", `${quality.sample_rate_hz} Hz`]);
-  if (quality.source) qualityItems.push(["候选算法数据源", quality.source]);
+  if (quality.source) qualityItems.push([metric.experimental ? "磁场数据源" : "候选算法数据源", quality.source]);
+  if (quality.confidence) qualityItems.push(["数据可信度", quality.confidence]);
+  if (quality.load_source) qualityItems.push(["动力负载来源", quality.load_source]);
+  if (quality.load_confidence) qualityItems.push(["动力关联可信度", quality.load_confidence]);
   const qualityHtml = qualityItems.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`).join("");
   const notes = (quality.notes || []).map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   const hits = (metric.rule_hits || []).map((hit) => `<li>${escapeHtml(hit)}</li>`).join("");
@@ -275,11 +354,33 @@ function explainabilitySection(metric) {
   return `<section class="explainability-section">
     <h4>结论可追溯信息</h4>
     ${qualityHtml ? `<div class="quality-grid">${qualityHtml}</div>` : ""}
-    ${hits ? `<div class="rule-hit-list"><strong>当前 v1 规则</strong><ul>${hits}</ul></div>` : ""}
+    ${hits ? `<div class="rule-hit-list"><strong>${metric.experimental ? "实验规则（不影响总评）" : "当前 v1 规则"}</strong><ul>${hits}</ul></div>` : ""}
     ${notes ? `<div class="quality-notes"><strong>数据限制</strong><ul>${notes}</ul></div>` : ""}
-    ${windows ? `<div class="anomaly-windows"><strong>候选算法发现的异常时间段</strong><div>${windows}</div></div>` : ""}
+    ${windows ? `<div class="anomaly-windows"><strong>${metric.experimental ? "磁场异常时间段" : "候选算法发现的异常时间段"}</strong><div class="anomaly-window-list" data-expanded="false">${windows}</div><button class="anomaly-more" type="button" data-anomaly-more>更多</button></div>` : ""}
     ${candidate}
   </section>`;
+}
+
+function updateAnomalyWindowControls(scope = document) {
+  scope.querySelectorAll(".anomaly-window-list").forEach((list) => {
+    if (!list.offsetWidth) return;
+    const items = [...list.querySelectorAll(".anomaly-jump")];
+    const columns = Math.max(1, getComputedStyle(list).gridTemplateColumns.split(" ").filter(Boolean).length);
+    const visibleLimit = columns * 3;
+    const expanded = list.dataset.expanded === "true";
+    items.forEach((item, index) => item.classList.toggle("anomaly-window-hidden", !expanded && index >= visibleLimit));
+    const toggle = list.parentElement.querySelector("[data-anomaly-more]");
+    const remaining = Math.max(0, items.length - visibleLimit);
+    toggle.classList.toggle("hidden", remaining === 0);
+    toggle.textContent = expanded ? "收起" : `更多（${remaining}）`;
+    toggle.setAttribute("aria-expanded", String(expanded));
+  });
+}
+
+function toggleAnomalyWindows(event) {
+  const list = event.currentTarget.parentElement.querySelector(".anomaly-window-list");
+  list.dataset.expanded = String(list.dataset.expanded !== "true");
+  updateAnomalyWindowControls(event.currentTarget.parentElement);
 }
 
 function candidateSection(candidate) {
@@ -863,4 +964,7 @@ function nearestPoint(points, target) {
   return points[low];
 }
 
-window.addEventListener("resize", () => drawAllExplorerPlots());
+window.addEventListener("resize", () => {
+  drawAllExplorerPlots();
+  document.querySelectorAll(".metric-card.open").forEach((card) => updateAnomalyWindowControls(card));
+});

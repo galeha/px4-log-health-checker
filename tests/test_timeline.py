@@ -75,6 +75,9 @@ class TimelineTests(unittest.TestCase):
         self.assertIn("遥控或手动控制信号丢失", titles)
         self.assertIn("横滚姿态超限", titles)
         self.assertIn("磁力计故障", titles)
+        mag_item = next(item for item in result["items"] if item["title"] == "磁力计故障")
+        self.assertIn("vehicle_magnetometer[0].magnetometer_ga[0]", mag_item["related_fields"])
+        self.assertIn("battery_status[1].current_a", mag_item["related_fields"])
         self.assertGreaterEqual(result["summary"]["severe_count"], 2)
         self.assertGreaterEqual(result["summary"]["warning_count"], 2)
 
@@ -126,6 +129,21 @@ class TimelineTests(unittest.TestCase):
         title, translated = timeline._translate("[Unknown event with ID 26266355]")
         self.assertFalse(translated)
         self.assertEqual(title, "无法解析的 PX4 事件（ID：26266355）")
+
+    def test_magnetic_message_recommends_field_current_and_ekf_curves(self):
+        fields = timeline._message_related_fields("Preflight Fail: Strong magnetic interference", "estimator")
+        self.assertIn("vehicle_magnetometer[0].magnetometer_ga[2]", fields)
+        self.assertIn("estimator_status_flags[0].cs_mag_field_disturbed", fields)
+        self.assertIn("battery_status[1].current_a", fields)
+
+    def test_mag_disturbed_status_changes_are_not_synthesized_as_events(self):
+        times = [1_000_000, 2_000_000, 3_000_000, 4_000_000]
+        dataset = FakeDataset("estimator_status_flags", {
+            "timestamp": times,
+            "cs_mag_field_disturbed": [0, 1, 0, 1],
+        })
+        result = timeline.build_timeline(FakeLog([dataset]))
+        self.assertFalse(any("磁场受扰" in item["title"] for item in result["items"]))
 
     def test_truncation_prioritizes_important_items(self):
         messages = [FakeMessage(1_000_000 + index * 2_000_000, "INFO", f"message {index}") for index in range(6)]

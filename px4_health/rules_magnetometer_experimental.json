@@ -1,0 +1,22 @@
+{
+  "version": "magnetometer-v0.1.0-experimental",
+  "minimum_samples": 30,
+  "minimum_duration_s": 10.0,
+  "minimum_coverage_fraction": 0.5,
+  "field_span_warning_ga": 0.15,
+  "field_span_severe_ga": 0.4,
+  "disturbed_continuous_warning_s": 1.0,
+  "disturbed_continuous_severe_s": 5.0,
+  "disturbed_fraction_severe": 0.1,
+  "mag_test_ratio_warning": 1.0,
+  "current_minimum_span_a": 3.0,
+  "current_delta_warning_ga": 0.05,
+  "current_delta_severe_ga": 0.15,
+  "current_correlation_warning": 0.5,
+  "current_correlation_severe": 0.6,
+  "motor_minimum_span": 0.1,
+  "motor_delta_warning_ga": 0.08,
+  "motor_delta_severe_ga": 0.2,
+  "motor_correlation_warning": 0.6,
+  "motor_correlation_severe": 0.7
+}

@@ -142,6 +142,7 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(34px, 4.8vw, 58px); line-heig
 .metric-summary { width: 100%; display: grid; grid-template-columns: 60px 180px 140px 1fr 32px; align-items: center; gap: 18px; padding: 20px 22px; color: inherit; background: transparent; border: 0; text-align: left; }
 .metric-number { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: #f0f3f2; color: #71807c; font-weight: 800; }
 .metric-name { font-weight: 800; }
+.experimental-badge { display: inline-block; margin-left: 7px; padding: 3px 6px; border-radius: 99px; color: #6e5b28; background: #fff3cc; font-size: 9px; font-style: normal; font-weight: 750; vertical-align: middle; }
 .status-pill { position: relative; justify-self: start; padding: 7px 11px; border-radius: 99px; font-weight: 800; font-size: 13px; cursor: help; }
 .metric-card.normal .status-pill { color: var(--green); background: var(--green-soft); }
 .metric-card.warning .status-pill { color: var(--amber); background: var(--amber-soft); }
@@ -157,10 +158,14 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(34px, 4.8vw, 58px); line-heig
 .metric-card.open .chevron { transform: rotate(180deg); }
 .metric-details { display: none; padding: 0 22px 26px 100px; border-top: 1px solid #edf0ef; }
 .metric-card.open .metric-details { display: block; }
-.evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 22px 0 10px; }
-.evidence { padding: 14px; border-radius: 13px; background: #f5f7f6; }
+.evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 10px; padding: 22px 0 10px; }
+.evidence { box-sizing: border-box; min-width: 0; max-width: 100%; padding: 14px; border-radius: 13px; background: #f5f7f6; }
 .evidence > .evidence-label { display: block; color: var(--muted); font-size: 11px; }
 .evidence strong { display: block; margin-top: 6px; font-size: 18px; }
+.evidence-value-wrap { display: block; width: 100%; min-width: 0; max-width: 100%; margin-top: 6px; outline: none; cursor: help; }
+.evidence-value { box-sizing: border-box; display: block; width: 100%; min-width: 0; max-width: 100%; margin-top: 0 !important; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.evidence-floating-tooltip { position: fixed; z-index: 1000; width: max-content; max-width: min(420px, calc(100vw - 20px)); padding: 9px 11px; border-radius: 9px; color: #edf8f4; background: #183e35; box-shadow: 0 12px 30px rgba(21,52,45,.22); overflow-wrap: anywhere; font-size: 11px; font-weight: 500; line-height: 1.5; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(4px); transition: opacity .12s, transform .12s, visibility .12s; }
+.evidence-floating-tooltip.visible { opacity: 1; visibility: visible; transform: translateY(0); }
 .evidence em { display: inline-block; margin-top: 7px; padding: 3px 7px; border-radius: 99px; font-size: 10px; font-style: normal; font-weight: 800; }
 .evidence.normal em { color: var(--green); background: var(--green-soft); }
 .evidence.warning em { color: var(--amber); background: var(--amber-soft); }
@@ -174,9 +179,12 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(34px, 4.8vw, 58px); line-heig
 .rule-hit-list, .quality-notes, .anomaly-windows { margin-top: 12px; color: #53635e; font-size: 11px; }
 .rule-hit-list > strong, .quality-notes > strong, .anomaly-windows > strong { display: block; margin-bottom: 6px; color: #334a43; }
 .rule-hit-list ul, .quality-notes ul, .candidate-hits { margin: 0; padding-left: 18px; line-height: 1.65; }
-.anomaly-windows > div { display: flex; flex-wrap: wrap; gap: 6px; }
-.anomaly-jump { padding: 6px 8px; border: 1px solid #e2b766; border-radius: 8px; color: #805814; background: #fff8e8; font-size: 9px; }
+.anomaly-window-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; }
+.anomaly-jump { min-width: 0; padding: 6px 8px; overflow: hidden; border: 1px solid #e2b766; border-radius: 8px; color: #805814; background: #fff8e8; font-size: 9px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .anomaly-jump.severe { border-color: #e49a9a; color: #9b3434; background: #fff0f0; }
+.anomaly-window-hidden { display: none; }
+.anomaly-more { margin-top: 8px; padding: 6px 12px; border: 1px solid #b9c9c4; border-radius: 8px; color: #35685b; background: #fff; font-size: 10px; font-weight: 700; }
+.anomaly-more:hover { border-color: #72a697; background: #f2f8f6; }
 .candidate-section { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #ccd9d5; }
 .candidate-section summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; color: #315148; font-size: 11px; font-weight: 750; }
 .candidate-section summary small { color: #7a8884; font-size: 9px; font-weight: 400; }
