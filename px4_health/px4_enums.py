@@ -43,6 +43,11 @@ FAILSAFE_ENUM = {
     1: ("已启用失效保护", "true"),
 }
 
+MAG_FIELD_DISTURBED_ENUM = {
+    0: ("未检测到磁场受扰", "false"),
+    1: ("检测到磁场受扰", "true"),
+}
+
 BATTERY_WARNING_ENUM = {
     0: ("无电池告警", "BATTERY_WARNING_NONE"),
     1: ("电量低", "BATTERY_WARNING_LOW"),
@@ -66,6 +71,18 @@ BATTERY_REMAINING_MARKERS = {
     -1: ("数据未知", "-1"),
     0: ("约 0%", "0"),
     1: ("约 100%", "1"),
+}
+
+MAG_X_AXIS_MARKER = {
+    "X": ("机头向前", "FRD +X"),
+}
+
+MAG_Y_AXIS_MARKER = {
+    "Y": ("机体向右", "FRD +Y"),
+}
+
+MAG_Z_AXIS_MARKER = {
+    "Z": ("机体向下", "FRD +Z"),
 }
 
 PRIMARY_EKF_INSTANCE_ENUM = {
@@ -113,6 +130,13 @@ FIELD_ENUMS = {
     ("estimator_status", "filter_fault_flags"): (
         "EKF 内部故障位掩码", FILTER_FAULT_FLAGS, FILTER_FAULT_NOTE, "bitmask",
     ),
+    ("estimator_status_flags", "cs_mag_field_disturbed"): (
+        "EKF 磁场受扰状态", MAG_FIELD_DISTURBED_ENUM,
+        "1 表示 EKF 检测到实测磁场强度或磁倾角与预期不符，附近大电流导线、电机、磁性材料或外部磁场"
+        "都可能导致该状态，并可能使 EKF 暂停使用磁力计融合；它不等同于磁力计硬件已经损坏。"
+        "cs_mag_fault=1 才表示磁力计已被判定故障且不再使用。若 EKF2_MAG_CHECK 关闭或对应检查未启用，"
+        "该字段为 0 也不能单独证明磁场环境一定正常。映射依据本机 PX4 1.15 EKF 定义。",
+    ),
     ("estimator_selector_status", "primary_instance"): (
         "当前主 EKF 实例索引", PRIMARY_EKF_INSTANCE_ENUM,
         "索引从 0 开始：0 是第一套 EKF，1 是第二套，2 是第三套。"
@@ -134,6 +158,48 @@ FIELD_ENUMS = {
         "预计剩余电量比例", BATTERY_REMAINING_MARKERS,
         "有效范围为 0～1：1 表示约 100%，0.5 表示约 50%，0 表示约 0%；-1 表示数据未知。"
         "它是 PX4 的电量估计值，不等同于直接测得的容量。",
+        "annotation",
+    ),
+    ("sensor_mag", "x"): (
+        "磁场 X 轴分量", MAG_X_AXIS_MARKER,
+        "单位 Gauss，表示磁场矢量在飞控板 FRD 坐标系 X 轴（机头向前）方向上的分量；"
+        "正负号表示磁场方向，不是横滚角。sensor_mag 是校准修正前的传感器数据，"
+        "PX4 后续会应用磁力计校准和估计偏置并生成 vehicle_magnetometer。",
+        "annotation",
+    ),
+    ("sensor_mag", "y"): (
+        "磁场 Y 轴分量", MAG_Y_AXIS_MARKER,
+        "单位 Gauss，表示磁场矢量在飞控板 FRD 坐标系 Y 轴（机体向右）方向上的分量；"
+        "正负号表示磁场方向，不是俯仰角。sensor_mag 是校准修正前的传感器数据，"
+        "PX4 后续会应用磁力计校准和估计偏置并生成 vehicle_magnetometer。",
+        "annotation",
+    ),
+    ("sensor_mag", "z"): (
+        "磁场 Z 轴分量", MAG_Z_AXIS_MARKER,
+        "单位 Gauss，表示磁场矢量在飞控板 FRD 坐标系 Z 轴（机体向下）方向上的分量；"
+        "正负号表示磁场方向，不是偏航角。sensor_mag 是校准修正前的传感器数据，"
+        "PX4 后续会应用磁力计校准和估计偏置并生成 vehicle_magnetometer。",
+        "annotation",
+    ),
+    ("vehicle_magnetometer", "magnetometer_ga[0]"): (
+        "校准后磁场 X 轴分量", MAG_X_AXIS_MARKER,
+        "单位 Gauss，表示 PX4 选中的磁力计经过校准和偏置修正后，在 FRD 机体系 X 轴（机头向前）"
+        "方向上的磁场分量。字段名末尾的 [0] 表示矢量 X 轴，不是第 1 个磁力计实例；"
+        "topic 名称后的 [0] 才是 ULog 的 multi_id。",
+        "annotation",
+    ),
+    ("vehicle_magnetometer", "magnetometer_ga[1]"): (
+        "校准后磁场 Y 轴分量", MAG_Y_AXIS_MARKER,
+        "单位 Gauss，表示 PX4 选中的磁力计经过校准和偏置修正后，在 FRD 机体系 Y 轴（机体向右）"
+        "方向上的磁场分量。字段名末尾的 [1] 表示矢量 Y 轴，不是第 2 个磁力计实例；"
+        "topic 名称后的 [0] 才是 ULog 的 multi_id。",
+        "annotation",
+    ),
+    ("vehicle_magnetometer", "magnetometer_ga[2]"): (
+        "校准后磁场 Z 轴分量", MAG_Z_AXIS_MARKER,
+        "单位 Gauss，表示 PX4 选中的磁力计经过校准和偏置修正后，在 FRD 机体系 Z 轴（机体向下）"
+        "方向上的磁场分量。字段名末尾的 [2] 表示矢量 Z 轴，不是第 3 个磁力计实例；"
+        "topic 名称后的 [0] 才是 ULog 的 multi_id。",
         "annotation",
     ),
 }
