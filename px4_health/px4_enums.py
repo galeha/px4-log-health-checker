@@ -43,6 +43,20 @@ FAILSAFE_ENUM = {
     1: ("已启用失效保护", "true"),
 }
 
+BATTERY_VOLTAGE_MARKERS = {
+    0: ("数据未知", "0 V"),
+}
+
+BATTERY_CURRENT_MARKERS = {
+    -1: ("数据未知", "-1 A"),
+}
+
+BATTERY_REMAINING_MARKERS = {
+    -1: ("数据未知", "-1"),
+    0: ("约 0%", "0"),
+    1: ("约 100%", "1"),
+}
+
 PRIMARY_EKF_INSTANCE_ENUM = {
     index: (f"EKF 索引 {index}（第{label}套 EKF）", f"estimator_status[{index}]")
     for index, label in enumerate(("一", "二", "三", "四", "五", "六", "七", "八", "九"))
@@ -86,6 +100,24 @@ FIELD_ENUMS = {
         "当前主 EKF 实例索引", PRIMARY_EKF_INSTANCE_ENUM,
         "索引从 0 开始：0 是第一套 EKF，1 是第二套，2 是第三套。"
         "它对应 estimator_status 的 multi_id，不代表固定优先级；实际可用数量请结合 instances_available。",
+    ),
+    ("battery_status", "voltage_v"): (
+        "电池组总电压", BATTERY_VOLTAGE_MARKERS,
+        "单位 V，表示整组电池的实时电压，不是单节电压；0 表示数据未知。"
+        "负载增大时短暂下降属于压降，需要结合电流和电池串数判断。",
+        "annotation",
+    ),
+    ("battery_status", "current_a"): (
+        "电池实时电流", BATTERY_CURRENT_MARKERS,
+        "单位 A。PX4 电池状态中通常以正值表示放电电流；-1 表示数据未知。"
+        "电流越大，电池负载通常越重。",
+        "annotation",
+    ),
+    ("battery_status", "remaining"): (
+        "预计剩余电量比例", BATTERY_REMAINING_MARKERS,
+        "有效范围为 0～1：1 表示约 100%，0.5 表示约 50%，0 表示约 0%；-1 表示数据未知。"
+        "它是 PX4 的电量估计值，不等同于直接测得的容量。",
+        "annotation",
     ),
 }
 

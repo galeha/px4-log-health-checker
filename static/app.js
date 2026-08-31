@@ -431,7 +431,7 @@ function renderFieldTree() {
     const rows = fields.map((field) => {
       const selected = explorerState.selected.has(field.key);
       return `<button class="field-option${selected ? " selected" : ""}" type="button" data-field-key="${escapeHtml(field.key)}">
-        <span class="field-toggle">${selected ? "✓" : "+"}</span><code>${escapeHtml(field.name)}</code>
+        <span class="field-toggle">${selected ? "✓" : "+"}</span>${curveFieldHelp(field.name, field)}
         <small>${escapeHtml(field.type)} · ${escapeHtml(field.unit || "单位未知")}</small>
       </button>`;
     }).join("");
@@ -525,7 +525,7 @@ function renderExplorerSelection() {
   $("#plotTarget").innerHTML = `<option value="auto">自动分组（推荐）</option><option value="new">单独新建图表</option>${plotOptions}`;
   if ([...$("#plotTarget").options].some((option) => option.value === currentTarget)) $("#plotTarget").value = currentTarget;
   const chips = [...explorerState.selected.values()].map((field) => `<div class="series-chip">
-    <span><i style="background:${seriesColor(field.key)}"></i><code>${escapeHtml(field.key)}</code></span>
+    <span><i style="background:${seriesColor(field.key)}"></i>${curveFieldHelp(field.key, field)}</span>
     <label class="series-plot-choice"><span>所在图表</span><select data-move-field="${escapeHtml(field.key)}" aria-label="移动曲线到其他图表">
         ${[...explorerState.plots.values()].map((plot) => `<option value="${escapeHtml(plot.id)}" ${plot.id === field.plotId ? "selected" : ""}>${escapeHtml(plotDisplayName(plot))}</option>`).join("")}
         <option value="__new">＋ 新建图表</option>
@@ -610,12 +610,12 @@ function renderExplorerPlots() {
     const plot = explorerState.plots.get(plotId);
     const legend = fields.map((field) => {
       const hidden = explorerState.hidden.has(field.key);
-      return `<span class="${hidden ? "curve-hidden" : ""}" data-toggle-series="${escapeHtml(field.key)}" aria-label="点击${hidden ? "显示" : "隐藏"}这条曲线"><i style="background:${seriesColor(field.key)}"></i>${enumFieldHelp(field.key, field.enum_values, field.enum_title, false, field.enum_note)}<button type="button" data-remove-field="${escapeHtml(field.key)}" title="移除曲线">×</button></span>`;
+      return `<span class="${hidden ? "curve-hidden" : ""}" data-toggle-series="${escapeHtml(field.key)}" aria-label="点击${hidden ? "显示" : "隐藏"}这条曲线"><i style="background:${seriesColor(field.key)}"></i>${curveFieldHelp(field.key, field)}<button type="button" data-remove-field="${escapeHtml(field.key)}" title="移除曲线">×</button></span>`;
     }).join("");
     const enumFields = fields.filter((field) => field.enum_values && field.enum_values.length);
     const plotEnum = enumFields.length === 1 ? enumFields[0] : null;
     return `<article class="explorer-plot" data-plot-id="${escapeHtml(plotId)}">
-      <header><div><h4>${enumFieldHelp(plotDisplayName(plot), plotEnum && plotEnum.enum_values, plotEnum && plotEnum.enum_title, true, plotEnum && plotEnum.enum_note)}</h4><small>${escapeHtml(plot.unit || "单位未知 / 自定义组合")}</small></div>
+      <header><div><h4>${curveFieldHelp(plotDisplayName(plot), plotEnum || (fields.length === 1 ? fields[0] : null), true)}</h4><small>${escapeHtml(plot.unit || "单位未知 / 自定义组合")}</small></div>
         <button type="button" data-toggle-legend="${escapeHtml(plotId)}">${plot.legendVisible ? "隐藏图例" : "显示图例"}</button></header>
       <div class="explorer-legend${plot.legendVisible ? "" : " hidden"}">${legend}</div>
       <div class="canvas-wrap"><canvas aria-label="${escapeHtml(plot.title)}曲线"></canvas></div>
@@ -634,11 +634,26 @@ function renderExplorerPlots() {
 }
 
 function enumFieldHelp(label, values, title = "各数字对应的状态", plain = false, note = "") {
-  if (!values || !values.length) return plain ? `<span>${escapeHtml(label)}</span>` : `<code>${escapeHtml(label)}</code>`;
-  const unique = new Map(values.map((item) => [item.value, item]));
+  const hasValues = Boolean(values && values.length);
+  if (!hasValues && !title && !note) return plain ? `<span>${escapeHtml(label)}</span>` : `<code>${escapeHtml(label)}</code>`;
+  const unique = new Map((values || []).map((item) => [item.value, item]));
   const rows = [...unique.values()].sort((left, right) => Number(left.value) - Number(right.value)).map((item) =>
     `<span><b>${escapeHtml(item.value)}</b><i>${escapeHtml(item.label)}</i><small>${escapeHtml(item.code)}</small></span>`).join("");
-  return `<span class="enum-field-help" tabindex="0"><code>${escapeHtml(label)}</code><span class="enum-tooltip" role="tooltip"><strong>${escapeHtml(title || "各数字对应的状态")}</strong><span class="enum-grid">${rows}</span><em>${escapeHtml(note || "未列出的数字按未知状态处理。")}</em></span></span>`;
+  const helpTitle = title || "字段说明";
+  const helpNote = note || (hasValues ? "未列出的数字按未知状态处理。" : "");
+  const nativeHint = [helpTitle, helpNote].filter(Boolean).join("：");
+  return `<span class="enum-field-help" tabindex="0" title="${escapeHtml(nativeHint)}"><code>${escapeHtml(label)}</code><b class="field-help-badge" aria-hidden="true">?</b><span class="enum-tooltip" role="tooltip"><strong>${escapeHtml(helpTitle)}</strong>${hasValues ? `<span class="enum-grid">${rows}</span>` : ""}${helpNote ? `<em>${escapeHtml(helpNote)}</em>` : ""}</span></span>`;
+}
+
+function curveFieldHelp(label, field, plain = false) {
+  if (!field) return plain ? `<span>${escapeHtml(label)}</span>` : `<code>${escapeHtml(label)}</code>`;
+  return enumFieldHelp(
+    label,
+    field.enum_values,
+    field.enum_title || "",
+    plain,
+    field.enum_note || "",
+  );
 }
 
 function handlePlotAction(event) {
@@ -822,6 +837,7 @@ function drawExplorerPlot({canvas, card, fields}) {
 
 function decodeCurveValue(line, value) {
   if (!line.enumValues || !line.enumValues.length || !Number.isFinite(Number(value))) return "";
+  if (line.enumKind === "annotation") return "";
   const numeric = Math.trunc(Number(value));
   if (line.enumKind === "bitmask") {
     if (numeric === 0) return (line.enumValues.find((item) => Number(item.value) === 0) || {}).label || "无故障";

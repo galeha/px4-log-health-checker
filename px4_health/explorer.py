@@ -33,6 +33,7 @@ _EXACT_UNITS = {
     ("vehicle_attitude_setpoint", "roll_body"): "rad",
     ("vehicle_attitude_setpoint", "pitch_body"): "rad",
     ("vehicle_attitude_setpoint", "yaw_body"): "rad",
+    ("battery_status", "remaining"): "比例（0–1）",
 }
 
 

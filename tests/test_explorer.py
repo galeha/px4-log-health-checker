@@ -70,6 +70,7 @@ class ExplorerTests(unittest.TestCase):
 
     def test_known_unit_is_conservative(self):
         self.assertEqual(field_unit("battery_status", "voltage_v"), "V")
+        self.assertEqual(field_unit("battery_status", "remaining"), "比例（0–1）")
         self.assertEqual(field_unit("sensor_accel", "x"), "m/s²")
         self.assertEqual(field_unit("sensor_accel", "y"), "m/s²")
         self.assertEqual(field_unit("sensor_accel", "z"), "m/s²")
@@ -77,6 +78,28 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(field_unit("sensor_accel", "clip_counter[0]"), "次")
         self.assertEqual(field_unit("sensor_accel", "clip_counter[2]"), "次")
         self.assertEqual(field_unit("custom_topic", "mystery"), "")
+
+    def test_battery_catalog_includes_chinese_field_help(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("battery_status", {
+            "timestamp": timestamps,
+            "voltage_v": [24.0, 23.5, 23.0],
+            "current_a": [5.0, 10.0, 15.0],
+            "remaining": [1.0, 0.8, 0.6],
+        })])
+        topics, _ = build_catalog(log)
+        fields = {field["name"]: field for field in topics[0]["fields"]}
+        self.assertEqual(fields["voltage_v"]["enum_title"], "电池组总电压")
+        self.assertEqual(fields["voltage_v"]["enum_kind"], "annotation")
+        self.assertEqual(fields["voltage_v"]["enum_values"][0]["label"], "数据未知")
+        self.assertIn("0 表示数据未知", fields["voltage_v"]["enum_note"])
+        self.assertEqual(fields["current_a"]["enum_title"], "电池实时电流")
+        self.assertIn("-1 表示数据未知", fields["current_a"]["enum_note"])
+        self.assertEqual(fields["remaining"]["unit"], "比例（0–1）")
+        self.assertEqual(
+            {item["value"] for item in fields["remaining"]["enum_values"]}, {-1, 0, 1}
+        )
+        self.assertIn("0.5 表示约 50%", fields["remaining"]["enum_note"])
 
     def test_nav_state_catalog_includes_flight_mode_enum(self):
         timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
