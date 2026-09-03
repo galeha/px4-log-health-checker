@@ -21,14 +21,24 @@
 需要 Python 3.10 或更高版本。Windows PowerShell 中运行：
 
 ```powershell
-cd C:\Users\Xu\Desktop\AI_work\px4-log-health-checker
+cd D:\AI_work\px4-log-health-checker
 .\run.ps1
 ```
 
-脚本会检查 `numpy` 和 `pyulog`，缺少时安装 `requirements.txt`，随后打开 `http://127.0.0.1:8765`。也可以直接运行：
+脚本会自动创建并使用项目目录中的 `.venv`，检查 `numpy` 和 `pyulog`，缺少时安装 `requirements.txt`，随后打开 `http://127.0.0.1:8765`。不需要提前激活虚拟环境，也不会修改系统 Python 环境。
+
+如果 PowerShell 首次运行时提示“禁止运行脚本”，先为当前 Windows 用户执行一次：
 
 ```powershell
-python app.py
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+确认后重新执行 `.\run.ps1`。该设置只调整当前用户的 PowerShell 脚本策略；如果设备由组织策略管理，请联系管理员，不要绕过组织限制。
+
+也可以绕过启动脚本，明确使用项目虚拟环境运行：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
 ```
 
 停止服务时在终端按 `Ctrl+C`。
@@ -36,7 +46,7 @@ python app.py
 ## 测试
 
 ```powershell
-python -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 真实日志校准和公开 PX4 样本获取见 [validation/README.md](validation/README.md)。当前规则仍为默认 v1.2.0；候选 v2 只有在人工标注集达到验收目标后才能升级为正式规则。

@@ -86,6 +86,12 @@ BATTERY_REMAINING_MARKERS = {
     1: ("约 100%", "1"),
 }
 
+ACTUATOR_MOTOR_CONTROL_MARKERS = {
+    -1: ("最大反向推力", "-1（仅可反转电机）"),
+    0: ("零推力", "0"),
+    1: ("最大正向推力", "1"),
+}
+
 MAG_X_AXIS_MARKER = {
     "X": ("机头向前", "FRD +X"),
 }
@@ -241,6 +247,24 @@ def enum_label(mapping: dict[int, tuple[str, str]], value: int, unknown_prefix: 
 
 def field_enum(topic: str, field: str) -> dict[str, Any] | None:
     metadata = FIELD_ENUMS.get((topic, field))
+    is_motor_control = (
+        topic == "actuator_motors"
+        and field.startswith("control[")
+        and field.endswith("]")
+    )
+    if not metadata and is_motor_control:
+        index_text = field[len("control["):-1]
+        if index_text.isdigit() and 0 <= int(index_text) < 12:
+            motor_number = int(index_text) + 1
+            metadata = (
+                f"第 {motor_number} 路电机归一化推力指令",
+                ACTUATOR_MOTOR_CONTROL_MARKERS,
+                f"control[{index_text}] 是控制分配器为第 {motor_number} 路电机生成的归一化推力设定值，"
+                "由 PWM、DSHOT 或 UAVCAN 等 ESC 输出驱动使用；它是指令值，不是实测转速、实际推力或电流。"
+                "范围为 -1～1：1 表示最大正向推力，-1 表示最大反向推力（仅可反转电机支持）；"
+                "NaN 表示停转。数组索引从 0 开始，且不代表固定的飞控物理输出针脚。",
+                "annotation",
+            )
     if not metadata:
         return None
     title, mapping, note, *options = metadata

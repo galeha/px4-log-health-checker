@@ -56,6 +56,8 @@ def field_unit(topic: str, field: str) -> str:
     if exact:
         return exact
     base = field.split("[")[0]
+    if topic == "actuator_motors" and base == "control":
+        return "归一化推力（-1～1）"
     if base.endswith("_counter") or base.endswith("_count") or base in {"samples", "error_count"}:
         return "次"
     suffixes = (

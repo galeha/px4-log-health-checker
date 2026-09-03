@@ -125,6 +125,27 @@ class ExplorerTests(unittest.TestCase):
         self.assertIn("机体向下", fields[names[2]]["enum_note"])
         self.assertIn("不是第 1 个磁力计实例", fields[names[0]]["enum_note"])
 
+    def test_actuator_motor_control_includes_normalized_thrust_help(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("actuator_motors", {
+            "timestamp": timestamps,
+            "control[0]": [0.0, 0.5, 1.0],
+            "control[1]": [0.0, 0.4, 0.8],
+        })])
+        topics, _ = build_catalog(log)
+        fields = {field["name"]: field for field in topics[0]["fields"]}
+
+        first_motor = fields["control[0]"]
+        self.assertEqual(first_motor["unit"], "归一化推力（-1～1）")
+        self.assertEqual(first_motor["enum_title"], "第 1 路电机归一化推力指令")
+        self.assertEqual(first_motor["enum_kind"], "annotation")
+        self.assertEqual(
+            {item["value"] for item in first_motor["enum_values"]}, {-1, 0, 1}
+        )
+        self.assertIn("不是实测转速", first_motor["enum_note"])
+        self.assertIn("数组索引从 0 开始", first_motor["enum_note"])
+        self.assertEqual(fields["control[1]"]["enum_title"], "第 2 路电机归一化推力指令")
+
     def test_battery_catalog_includes_chinese_field_help(self):
         timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
         log = FakeLog([Dataset("battery_status", {
