@@ -295,6 +295,12 @@ const percentileHelp = {
   "P90-P10": "第 90 百分位减第 10 百分位，表示中间约 80% 样本的典型变化范围，可减少两端偶然尖峰的影响。",
 };
 
+const evidenceLabelHelp = {
+  "磁力计创新检验比 P95": "读取当前主 EKF 的 estimator_status.mag_test_ratio。它是三轴中最大的磁力计观测偏差相对于 EKF 检验门限的比值，不是磁场强度。P95 表示约 95% 的样本不高于该值；达到或超过 1，说明飞行中至少出现过达到融合检验门限的时段。",
+  "高低负载磁场模长差": "先将动力负载数据按时间插值到磁力计样本，再分别取负载最低 20% 与最高 20% 样本的磁场模长中位数；本值为高负载中位数减低负载中位数。正值表示高负载时磁场模长更大，负值则相反。",
+  "磁场-负载秩相关系数 ρ": "对按时间对齐后的磁场模长和动力负载分别排序，再计算相关系数（Spearman 秩相关）。范围为 -1 到 1：接近 1 表示负载增大时磁场通常也增大，接近 -1 表示通常减小，接近 0 表示未见稳定的单调关系；相关性不能单独证明因果。",
+};
+
 const metricLevels = {
   "vibration": ["正常", "偏大", "严重", "数据不足"],
   "gps": ["良好", "较差", "异常", "数据不足"],
@@ -305,6 +311,9 @@ const metricLevels = {
 };
 
 function formatEvidenceLabel(label) {
+  if (evidenceLabelHelp[label]) {
+    return `<span class="stat-term" tabindex="0">${escapeHtml(label)}<sup>i</sup><span class="stat-tooltip" role="tooltip">${escapeHtml(evidenceLabelHelp[label])}</span></span>`;
+  }
   const pattern = /P90-P10|P10|P90|P95/g;
   let result = "", cursor = 0, match;
   while ((match = pattern.exec(label)) !== null) {

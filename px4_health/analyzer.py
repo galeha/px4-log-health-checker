@@ -423,7 +423,7 @@ def _select_power_load(
 
 
 def _magnetometer_unavailable(log: ULog, reason: str, quality: dict[str, Any] | None = None) -> dict[str, Any]:
-    result = _unavailable("magnetometer", "磁力计与动力干扰（实验）", reason, log)
+    result = _unavailable("magnetometer", "磁力计异常（实验）", reason, log)
     result.update({
         "experimental": True,
         "affects_overall": False,
@@ -628,7 +628,7 @@ def _magnetometer(log: ULog, start: int, end: int) -> dict[str, Any]:
         })
 
     return {
-        "id": "magnetometer", "name": "磁力计与动力干扰（实验）", "status": _status(rank), "label": labels[rank],
+        "id": "magnetometer", "name": "磁力计异常（实验）", "status": _status(rank), "label": labels[rank],
         "summary": summary,
         "details": [
             "磁场模长由三轴磁场计算，比单独观察 X/Y/Z 更不容易把姿态旋转误判为干扰。",
@@ -1107,12 +1107,12 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
         (_battery, "battery", "电池压降"),
         (_attitude, "attitude", "姿态跟踪"),
         (_motors, "motors", "电机输出余量"),
-        (_magnetometer, "magnetometer", "磁力计与动力干扰（实验）"),
+        (_magnetometer, "magnetometer", "磁力计异常（实验）"),
     )
     for function, metric_id, name in analyzers:
         if not has_flight:
             if metric_id == "magnetometer":
-                metrics.append(_magnetometer_unavailable(log, "未检测到有效飞行阶段，不能分析磁力计与动力负载的关系。"))
+                metrics.append(_magnetometer_unavailable(log, "未检测到有效飞行阶段，不能分析磁场异常及其可能的动力关联。"))
             else:
                 metrics.append(_unavailable(metric_id, name, "未检测到有效飞行阶段，不能给出飞行健康结论。", log))
             continue
