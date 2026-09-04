@@ -41,13 +41,61 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 .\.venv\Scripts\python.exe app.py
 ```
 
-停止服务时在终端按 `Ctrl+C`。
+停止服务时可以在控制台按任意键，也可以点击浏览器右上角的“退出程序”。正常关闭最后一个浏览器标签页后，本地服务也会自动退出；刷新页面不会误退出。服务退出后，尚未关闭的标签页会显示退出提示。
 
 ## 测试
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+## 构建 Windows 便携版
+
+项目使用 PyInstaller `onedir` 模式生成无需安装 Python 的 Windows x64 便携目录。构建机必须是 Windows x64，并已通过 `run.ps1` 创建项目虚拟环境。
+
+```powershell
+cd D:\AI_work\px4-log-health-checker
+.\scripts\build_windows.ps1
+```
+
+如果当前 PowerShell 执行策略不允许运行脚本，可以只为本次终端进程临时放行后构建；关闭终端后设置即失效：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\scripts\build_windows.ps1
+```
+
+构建脚本会安装固定版本的构建依赖、运行源码测试、生成便携目录，并启动打包后的程序检查健康接口和前端静态资源。产物位于：
+
+```text
+dist\PX4-Log-Health-Checker\
+```
+
+双击其中的 `PX4-Log-Health-Checker.exe` 即可启动；程序会打开默认浏览器。可以在控制台按任意键、点击页面右上角的“退出程序”，或者关闭最后一个浏览器标签页来停止服务。单独重复打包产物检查时运行：
+
+```powershell
+.\scripts\smoke_test_packaged_app.ps1
+```
+
+## 发布 GitHub Release
+
+推送符合语义化版本格式的 `v*` Tag 后，GitHub Actions 会在 Windows x64 环境中重新安装依赖、运行测试、构建和检查便携程序，并自动发布带 SHA-256 校验文件的 GitHub Release。正式版本使用 `v1.2.0` 格式；测试版本可以使用 `v1.3.0-beta.1`，并会自动标记为 prerelease。
+
+发布前先提交并推送全部源码修改，然后在需要发布的提交上创建 Tag：
+
+```powershell
+git tag -a v1.2.0 -m "Release v1.2.0"
+git push origin v1.2.0
+```
+
+工作流成功后，Release 中会包含：
+
+```text
+PX4-Log-Health-Checker-v1.2.0-win64.zip
+PX4-Log-Health-Checker-v1.2.0-win64.zip.sha256
+```
+
+正式 Tag 和已经发布的 Release 不应覆盖或移动；后续修复应创建新版本号。如果工作流在创建 Release 时提示权限不足，请在仓库 `Settings → Actions → General → Workflow permissions` 中允许 GitHub Actions 创建和更新仓库内容。
 
 真实日志校准和公开 PX4 样本获取见 [validation/README.md](validation/README.md)。当前规则仍为默认 v1.2.0；候选 v2 只有在人工标注集达到验收目标后才能升级为正式规则。
 

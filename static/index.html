@@ -13,7 +13,10 @@
       <span class="brand-mark">PX4</span>
       <span>飞行健康检查器</span>
     </a>
-    <span class="local-badge"><i></i> 本机离线分析</span>
+    <div class="topbar-actions">
+      <span class="local-badge"><i></i> 本机离线分析</span>
+      <button id="exitProgramButton" class="exit-program-button" type="button">退出程序</button>
+    </div>
   </header>
 
   <main>
@@ -137,6 +140,13 @@
     <span>PX4 Log Health Checker · 规则结果可追溯</span>
     <span>不上传 · 不保存 · 不修改参数</span>
   </footer>
+  <div id="serviceStopped" class="service-stopped hidden" role="alert" aria-live="assertive">
+    <section>
+      <span class="service-stopped-mark">PX4</span>
+      <h2>程序已经退出</h2>
+      <p>本地分析服务已停止，现在可以关闭这个浏览器标签页。</p>
+    </section>
+  </div>
   <script src="/app.js"></script>
 </body>
 </html>

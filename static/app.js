@@ -4,8 +4,73 @@ const fileInput = $("#fileInput");
 const progressPanel = $("#progressPanel");
 const errorPanel = $("#errorPanel");
 const results = $("#results");
+const serviceStopped = $("#serviceStopped");
+const exitProgramButton = $("#exitProgramButton");
 let explorerState = null;
 let timelineState = null;
+
+const browserClientId = globalThis.crypto?.randomUUID?.()
+  || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const browserClientPayload = JSON.stringify({ client_id: browserClientId });
+let programExitRequested = false;
+
+async function registerBrowserClient() {
+  try {
+    const response = await fetch("/api/browser-open", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-PX4-Health-Client": "browser",
+      },
+      body: browserClientPayload,
+      cache: "no-store",
+      keepalive: true,
+    });
+    if (!response.ok) throw new Error("browser registration failed");
+  } catch (_error) {
+    // The regular health check will show the stopped-service message if needed.
+  }
+}
+
+window.addEventListener("pageshow", registerBrowserClient);
+window.addEventListener("pagehide", () => {
+  if (programExitRequested) return;
+  navigator.sendBeacon(
+    "/api/browser-close",
+    new Blob([browserClientPayload], { type: "application/json" }),
+  );
+});
+
+exitProgramButton?.addEventListener("click", async () => {
+  exitProgramButton.disabled = true;
+  try {
+    const response = await fetch("/api/shutdown", {
+      method: "POST",
+      headers: { "X-PX4-Health-Client": "browser" },
+    });
+    if (!response.ok) throw new Error("shutdown failed");
+    programExitRequested = true;
+    window.clearInterval(backendHealthTimer);
+    serviceStopped?.classList.remove("hidden");
+  } catch (_error) {
+    exitProgramButton.disabled = false;
+  }
+});
+
+let backendHealthFailures = 0;
+const backendHealthTimer = window.setInterval(async () => {
+  try {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    if (!response.ok) throw new Error("health check failed");
+    backendHealthFailures = 0;
+  } catch (_error) {
+    backendHealthFailures += 1;
+    if (backendHealthFailures >= 2) {
+      window.clearInterval(backendHealthTimer);
+      serviceStopped?.classList.remove("hidden");
+    }
+  }
+}, 1000);
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;")

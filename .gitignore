@@ -23,6 +23,7 @@ build/
 *.csv
 reports/
 analysis-output/
+release/
 validation-data/
 validation/results/
 validation/manifest.local.json
