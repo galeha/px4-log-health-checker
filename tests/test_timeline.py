@@ -125,6 +125,16 @@ class TimelineTests(unittest.TestCase):
             ("执行自定义降落（第三方模块消息）", True),
         )
 
+    def test_commander_failsafe_messages_have_chinese_explanations(self):
+        self.assertEqual(
+            timeline._translate("[commander] Failsafe mode deactivated"),
+            ("失效保护模式已解除", True),
+        )
+        self.assertEqual(
+            timeline._translate("[commander] Failsafe enabled: No manual control stick input"),
+            ("失效保护已启用：未检测到人工摇杆输入", True),
+        )
+
     def test_unknown_numeric_event_id_is_not_guessed(self):
         title, translated = timeline._translate("[Unknown event with ID 26266355]")
         self.assertFalse(translated)

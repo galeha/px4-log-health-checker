@@ -7,6 +7,8 @@
     "Disarmed by RC": "通过遥控器上锁",
     "Failsafe activated": "失效保护已触发",
     "Failsafe mode activated": "已进入失效保护模式",
+    "Failsafe mode deactivated": "失效保护模式已解除",
+    "Failsafe enabled: No manual control stick input": "失效保护已启用：未检测到人工摇杆输入",
     "Manual control lost": "遥控或手动控制信号丢失",
     "Manual control regained": "遥控或手动控制信号恢复",
     "Data link lost": "数据链路丢失",
