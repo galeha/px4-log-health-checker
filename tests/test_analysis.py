@@ -90,7 +90,7 @@ class AnalysisRuleTests(unittest.TestCase):
         log, _ = self._mag_log(np.full(120, 0.5))
         result = _magnetometer(log, 0, 12_000_000)
         self.assertEqual(result["status"], "normal")
-        self.assertEqual(result["name"], "磁力计异常（实验）")
+        self.assertEqual(result["name"], "磁力计异常")
         self.assertNotIn("动力干扰", result["name"])
         self.assertEqual(result["power_relation"], "无法判断")
         self.assertTrue(result["experimental"])

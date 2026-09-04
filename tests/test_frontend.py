@@ -32,7 +32,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('line.enumKind === "bitmask"', javascript)
         self.assertIn('line.enumKind === "annotation"', javascript)
         self.assertIn('"magnetometer": ["未见明显异常"', javascript)
-        self.assertIn('class="experimental-badge"', javascript)
+        self.assertNotIn('class="experimental-badge"', javascript)
         self.assertIn('class="evidence-value-wrap"', javascript)
         self.assertIn('data-full-value="${escapeHtml(fullValue)}"', javascript)
         self.assertIn('"磁场模长中位数"', javascript)

@@ -342,7 +342,7 @@ function metricCard(metric, index) {
   return `<article class="metric-card ${escapeHtml(metric.status)}">
     <button class="metric-summary" type="button" aria-label="展开${escapeHtml(metric.name)}详情">
       <span class="metric-number">0${index + 1}</span>
-      <span class="metric-name">${escapeHtml(metric.name)}${metric.experimental ? `<em class="experimental-badge">实验规则 · 计入总评</em>` : ""}</span>
+      <span class="metric-name">${escapeHtml(metric.name)}</span>
       <span class="status-pill">${escapeHtml(metric.label)}<span class="status-tooltip" role="tooltip"><strong>全部判断等级</strong><span>${(metricLevels[metric.id] || ["正常", "提醒", "严重", "数据不足"]).map(escapeHtml).join("　/　")}</span></span></span>
       <span class="metric-brief">${escapeHtml(metric.summary)}</span>
       <span class="chevron">⌄</span>
