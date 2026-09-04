@@ -62,7 +62,14 @@
           <h2 id="overallTitle">飞行健康概览</h2>
           <p id="scopeText"></p>
         </div>
-        <button id="newFileButton" class="secondary-button" type="button">分析另一份日志</button>
+        <button id="newFileButton" class="secondary-button" type="button">
+          <span class="secondary-button-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+            </svg>
+          </span>
+          <span>分析另一份日志</span>
+        </button>
       </div>
 
       <div id="vehicleWarning" class="vehicle-warning hidden" role="alert"></div>
