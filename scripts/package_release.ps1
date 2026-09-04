@@ -31,11 +31,30 @@ $archiveName = "PX4-Log-Health-Checker-$VersionTag-win64.zip"
 $archivePath = Join-Path $OutputDirectory $archiveName
 $checksumPath = "$archivePath.sha256"
 
-Compress-Archive `
-    -LiteralPath $portableDirectory `
-    -DestinationPath $archivePath `
-    -CompressionLevel Optimal `
-    -Force
+$archiveCreated = $false
+for ($attempt = 1; $attempt -le 5; $attempt++) {
+    try {
+        Compress-Archive `
+            -LiteralPath $portableDirectory `
+            -DestinationPath $archivePath `
+            -CompressionLevel Optimal `
+            -Force `
+            -ErrorAction Stop
+        $archiveCreated = $true
+        break
+    }
+    catch {
+        if ($attempt -eq 5) {
+            throw
+        }
+        Write-Warning "Release files are temporarily locked; retrying archive creation ($attempt/5)..."
+        Start-Sleep -Seconds 2
+    }
+}
+
+if (-not $archiveCreated -or -not (Test-Path -LiteralPath $archivePath -PathType Leaf)) {
+    throw "Release archive was not created: $archivePath"
+}
 
 $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath $checksumPath -Value "$hash  $archiveName" -Encoding Ascii

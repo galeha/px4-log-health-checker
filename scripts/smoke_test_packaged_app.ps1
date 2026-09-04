@@ -82,8 +82,20 @@ finally {
     if ($process) {
         $process.Refresh()
         if (-not $process.HasExited) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            $process.WaitForExit(5000) | Out-Null
+            try {
+                Invoke-RestMethod `
+                    -Uri "http://127.0.0.1:$port/api/shutdown" `
+                    -Method Post `
+                    -Headers @{ 'X-PX4-Health-Client' = 'browser' } `
+                    -TimeoutSec 2 | Out-Null
+            }
+            catch {
+                # Fall back to stopping the test process below.
+            }
+            if (-not $process.WaitForExit(5000)) {
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                $process.WaitForExit(5000) | Out-Null
+            }
         }
         $process.Dispose()
     }

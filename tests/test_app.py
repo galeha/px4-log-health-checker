@@ -92,5 +92,27 @@ class ExitKeyTests(unittest.TestCase):
         self.assertFalse(server.stopped)
 
 
+class ConsoleOutputTests(unittest.TestCase):
+    def test_chinese_output_does_not_fail_on_western_console_encoding(self):
+        class Cp1252Stream:
+            encoding = "cp1252"
+
+            def __init__(self):
+                self.values = []
+
+            def write(self, value):
+                value.encode(self.encoding)
+                self.values.append(value)
+
+            def flush(self):
+                pass
+
+        stream = Cp1252Stream()
+        with patch("sys.stdout", stream):
+            app._console_print("正在停止本地服务……")
+
+        self.assertIn("?", "".join(stream.values))
+
+
 if __name__ == "__main__":
     unittest.main()

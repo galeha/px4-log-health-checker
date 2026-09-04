@@ -24,6 +24,15 @@ SESSIONS = LogSessionStore()
 CLIENT_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{8,128}\Z")
 
 
+def _console_print(*values) -> None:
+    try:
+        print(*values)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        safe_values = [str(value).encode(encoding, errors="replace").decode(encoding) for value in values]
+        print(*safe_values)
+
+
 class BrowserClientTracker:
     def __init__(self, shutdown_callback, shutdown_delay: float = 3.0, timer_factory=Timer):
         self._shutdown_callback = shutdown_callback
@@ -62,7 +71,7 @@ class BrowserClientTracker:
         with self._lock:
             if self._clients or generation != self._generation:
                 return
-        print("\n浏览器界面已关闭，正在停止本地服务……")
+        _console_print("\n浏览器界面已关闭，正在停止本地服务……")
         self._shutdown_callback()
 
 
@@ -93,7 +102,7 @@ def _read_exit_key() -> bool:
 
 def _stop_server_on_keypress(server: ThreadingHTTPServer) -> None:
     if _read_exit_key():
-        print("\n正在停止本地服务……")
+        _console_print("\n正在停止本地服务……")
         server.shutdown()
 
 
@@ -254,7 +263,7 @@ class HealthHandler(SimpleHTTPRequestHandler):
             self._json({"error": f"读取曲线失败：{exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def log_message(self, format, *args):
-        print(f"[{self.log_date_time_string()}] {format % args}")
+        _console_print(f"[{self.log_date_time_string()}] {format % args}")
 
 
 def main() -> None:
@@ -262,15 +271,15 @@ def main() -> None:
     port = int(os.environ.get("PX4_HEALTH_PORT", "8765"))
     url = f"http://{host}:{port}"
     server = HealthServer((host, port), HealthHandler)
-    print(f"PX4 中文飞行健康检查器已启动：{url}")
-    print("日志只在本机临时解析。按任意键停止并退出程序。")
+    _console_print(f"PX4 中文飞行健康检查器已启动：{url}")
+    _console_print("日志只在本机临时解析。按任意键停止并退出程序。")
     if os.environ.get("PX4_HEALTH_NO_BROWSER") != "1":
         Timer(0.8, lambda: webbrowser.open(url)).start()
     Thread(target=_stop_server_on_keypress, args=(server,), daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n已停止。")
+        _console_print("\n已停止。")
     finally:
         server.server_close()
         SESSIONS.close()
