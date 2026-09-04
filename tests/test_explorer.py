@@ -254,6 +254,24 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(ratio["unit"], "比值")
         self.assertIn("达到或超过 1", ratio["enum_note"])
 
+    def test_inertial_dead_reckoning_includes_status_help(self):
+        timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
+        log = FakeLog([Dataset("estimator_status_flags", {
+            "timestamp": timestamps,
+            "cs_inertial_dead_reckoning": [0, 1, 1],
+        })])
+        topics, _ = build_catalog(log)
+        field = topics[0]["fields"][0]
+        meanings = {item["value"]: item["label"] for item in field["enum_values"]}
+
+        self.assertEqual(field["unit"], "状态（0/1）")
+        self.assertEqual(field["enum_title"], "EKF 纯惯性航位推算状态")
+        self.assertEqual(meanings[0], "未进入纯惯性航位推算")
+        self.assertEqual(meanings[1], "正在进行纯惯性航位推算")
+        self.assertIn("约束水平速度漂移", field["enum_note"])
+        self.assertIn("并不直接表示 IMU 硬件故障", field["enum_note"])
+        self.assertIn("cs_opt_flow", field["enum_note"])
+
     def test_primary_estimator_instance_catalog_explains_zero_based_index(self):
         timestamps = np.arange(1_000_000, 4_000_000, 1_000_000, dtype=np.int64)
         log = FakeLog([Dataset("estimator_selector_status", {

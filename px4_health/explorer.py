@@ -42,6 +42,7 @@ _EXACT_UNITS = {
     ("failsafe_flags", "battery_warning"): "告警等级",
     ("estimator_status_flags", "cs_mag_field_disturbed"): "状态（0/1）",
     ("estimator_status_flags", "cs_mag_fault"): "状态（0/1）",
+    ("estimator_status_flags", "cs_inertial_dead_reckoning"): "状态（0/1）",
     ("estimator_status", "mag_test_ratio"): "比值",
     ("vehicle_attitude_setpoint", "roll_body"): "rad",
     ("vehicle_attitude_setpoint", "pitch_body"): "rad",

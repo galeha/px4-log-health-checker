@@ -53,6 +53,11 @@ MAG_FAULT_ENUM = {
     1: ("磁力计已被 EKF 判定为故障并停止使用", "true"),
 }
 
+INERTIAL_DEAD_RECKONING_ENUM = {
+    0: ("未进入纯惯性航位推算", "false"),
+    1: ("正在进行纯惯性航位推算", "true"),
+}
+
 MAG_TEST_RATIO_MARKERS = {
     1: ("达到磁力计融合检验门限", "1"),
 }
@@ -160,6 +165,13 @@ FIELD_ENUMS = {
         "EKF 磁力计故障状态", MAG_FAULT_ENUM,
         "0 表示当前没有把磁力计判定为故障；1 表示 EKF 已将磁力计判定为故障并停止使用。"
         "它比 cs_mag_field_disturbed 更严重，但仍需结合主 EKF 实例和故障发生时间判断。",
+    ),
+    ("estimator_status_flags", "cs_inertial_dead_reckoning"): (
+        "EKF 纯惯性航位推算状态", INERTIAL_DEAD_RECKONING_ENUM,
+        "1 表示 EKF 已没有继续融合能够约束水平速度漂移的观测，水平位置和速度主要依靠 IMU 惯性积分外推，"
+        "误差会随持续时间累积；0 表示尚未处于这种状态，但不能单独证明定位质量良好。"
+        "该状态常见于 GNSS、光流或外部视觉等水平辅助源不可用、超时或观测被拒绝，并不直接表示 IMU 硬件故障。"
+        "飞行中若持续为 1，应结合 cs_gnss_pos、cs_gnss_vel、cs_opt_flow、cs_ev_pos、cs_ev_vel 及创新检验结果排查。",
     ),
     ("estimator_status", "mag_test_ratio"): (
         "磁力计创新检验比", MAG_TEST_RATIO_MARKERS,
