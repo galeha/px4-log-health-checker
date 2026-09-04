@@ -136,6 +136,7 @@ function showError(message) {
 }
 
 function renderResults(data) {
+  setTimelineData(data.timeline);
   $("#overallTitle").textContent = data.overall;
   $("#scopeText").textContent = data.meta.scope;
   $("#disclaimer").textContent = `安全提示：${data.disclaimer}`;
@@ -157,6 +158,7 @@ function renderResults(data) {
     `<div class="meta-item"><span>${escapeHtml(label)}</span><div class="meta-value"><strong>${escapeHtml(value)}</strong></div></div>`
   ).join("");
   $("#metricGrid").innerHTML = data.metrics.map((metric, index) => metricCard(metric, index)).join("");
+  $("#metricGrid").onclick = handleMetricChartAction;
   document.querySelectorAll(".metric-summary").forEach((button) => button.addEventListener("click", () => {
     const card = button.closest(".metric-card");
     card.classList.toggle("open");
@@ -176,15 +178,61 @@ const timelineCategories = {
 };
 
 const timelineSeverities = {severe: "严重", warning: "警告", info: "信息"};
+const TIMELINE_COLORS = {severe: "#b33c32", warning: "#b46b08", info: "#6a7472"};
+
+function setTimelineData(timeline) {
+  timelineState = timeline ? {data: timeline, scope: "important", category: "all"} : null;
+}
+
+function importantTimelineItems(start = -Infinity, end = Infinity) {
+  if (!timelineState) return [];
+  return (timelineState.data.items || []).filter((item) => {
+    const time = Number(item.time_s);
+    return item.important && Number.isFinite(time) && time >= start && time <= end;
+  });
+}
+
+function timelineGroupSeverity(items) {
+  if (items.some((item) => item.severity === "severe")) return "severe";
+  if (items.some((item) => item.severity === "warning")) return "warning";
+  return "info";
+}
+
+function groupTimelineItems(items, position, threshold = 4) {
+  const groups = [];
+  items.slice().sort((left, right) => Number(left.time_s) - Number(right.time_s)).forEach((item) => {
+    const itemPosition = position(Number(item.time_s));
+    const previous = groups.at(-1);
+    if (previous && Math.abs(itemPosition - previous.position) <= threshold) {
+      previous.items.push(item);
+      previous.position = previous.items.reduce((sum, current) => sum + position(Number(current.time_s)), 0) / previous.items.length;
+    } else {
+      groups.push({position: itemPosition, items: [item]});
+    }
+  });
+  return groups;
+}
+
+function timelineGroupDescription(items) {
+  const first = Number(items[0].time_s);
+  const last = Number(items.at(-1).time_s);
+  const time = first === last
+    ? formatTimelineTime(first)
+    : `${formatTimelineTime(first)}–${formatTimelineTime(last)}`;
+  const details = items.map((item) =>
+    `[${timelineSeverities[item.severity] || item.severity} / ${timelineCategories[item.category] || item.category}] ${item.title}`
+  );
+  return `${time}\n${details.join("\n")}`;
+}
 
 function renderTimeline(timeline) {
   const panel = $("#flightTimeline");
   if (!timeline) {
-    timelineState = null;
+    setTimelineData(null);
     panel.classList.add("hidden");
     return;
   }
-  timelineState = {data: timeline, scope: "important", category: "all"};
+  if (!timelineState || timelineState.data !== timeline) setTimelineData(timeline);
   panel.classList.remove("hidden");
   const summary = timeline.summary || {};
   $("#timelineSummaryText").textContent = summary.severe_count || summary.warning_count
@@ -471,12 +519,41 @@ function chart(series) {
     const value = maxY - fraction * (maxY - minY);
     return `<line class="grid-line" x1="${left}" x2="${width-right}" y1="${gy}" y2="${gy}"/><text x="2" y="${gy+3}">${formatNumber(value)}</text>`;
   }).join("");
+  const timelineItems = importantTimelineItems(minX, maxX);
+  const timelineGroups = groupTimelineItems(timelineItems, x);
+  const timelineMarkers = timelineGroups.map((group) => {
+    const markerX = group.position.toFixed(1);
+    const severity = timelineGroupSeverity(group.items);
+    const description = timelineGroupDescription(group.items);
+    return `<g class="chart-timeline-marker ${severity}" tabindex="0" role="img" aria-label="${escapeHtml(description)}">
+      <line x1="${markerX}" x2="${markerX}" y1="${top}" y2="${height-bottom}"/>
+      <path d="M ${markerX} ${height-bottom} l -4 7 h 8 z"/>
+      <title>${escapeHtml(description)}</title>
+    </g>`;
+  }).join("");
   const legend = lines.length > 1 ? `<div class="chart-legend">${lines.map((line, index) => `<span><i class="legend-${index}"></i>${escapeHtml(line.name)}</span>`).join("")}</div>` : "";
-  return `<div class="chart"><div class="chart-title"><h4>${escapeHtml(series.name)}${series.unit ? `（${escapeHtml(series.unit)}）` : ""}</h4>${legend}</div>
+  const timelineHint = timelineItems.length ? "显示事件与告警时间线" : "此图时间范围内没有重要事件";
+  return `<div class="chart"><div class="chart-title"><h4>${escapeHtml(series.name)}${series.unit ? `（${escapeHtml(series.unit)}）` : ""}</h4><div class="chart-controls">${legend}
+      <button class="timeline-toggle" type="button" data-toggle-chart-timeline aria-pressed="false" aria-label="${timelineHint}" title="${timelineHint}" ${timelineItems.length ? "" : "disabled"}>事件与告警</button>
+    </div></div>
     <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(series.name)}曲线">
-      ${grid}${polylines}
+      ${grid}${polylines}<g class="chart-timeline-layer hidden" aria-hidden="true">${timelineMarkers}</g>
       <text x="${left}" y="${height-4}">${formatNumber(minX)}s</text><text x="${width-right-35}" y="${height-4}">${formatNumber(maxX)}s</text>
     </svg></div>`;
+}
+
+function handleMetricChartAction(event) {
+  const button = event.target.closest("[data-toggle-chart-timeline]");
+  if (!button || button.disabled) return;
+  const layer = button.closest(".chart")?.querySelector(".chart-timeline-layer");
+  if (!layer) return;
+  const visible = button.getAttribute("aria-pressed") !== "true";
+  button.setAttribute("aria-pressed", String(visible));
+  button.setAttribute("aria-label", visible ? "隐藏事件与告警时间线" : "显示事件与告警时间线");
+  button.title = visible ? "隐藏事件与告警时间线" : "显示事件与告警时间线";
+  button.classList.toggle("active", visible);
+  layer.classList.toggle("hidden", !visible);
+  layer.setAttribute("aria-hidden", String(!visible));
 }
 
 function formatNumber(value) {
@@ -489,6 +566,8 @@ const EXPLORER_COLORS = ["#087b62", "#e08b25", "#3478c5", "#d1495b", "#7457b2", 
 
 function initExplorer(catalog) {
   const panel = $("#logExplorer");
+  if (explorerState?.controller) explorerState.controller.abort();
+  explorerState = null;
   if (!catalog) {
     panel.classList.add("hidden");
     return;
@@ -602,7 +681,8 @@ function addExplorerField(key, target = "auto") {
 
 function ensurePlot(id, title, unit = "") {
   if (!explorerState.plots.has(id)) explorerState.plots.set(id, {
-    id, title, unit, legendVisible: true, number: explorerState.plotCounter++,
+    id, title, unit, legendVisible: true, timelineVisible: false, pinnedTimelineItems: null,
+    number: explorerState.plotCounter++,
   });
   return id;
 }
@@ -729,9 +809,13 @@ function renderExplorerPlots() {
     }).join("");
     const enumFields = fields.filter((field) => field.enum_values && field.enum_values.length);
     const plotEnum = enumFields.length === 1 ? enumFields[0] : null;
+    const hasTimeline = importantTimelineItems().length > 0;
     return `<article class="explorer-plot" data-plot-id="${escapeHtml(plotId)}">
       <header><div><h4>${curveFieldHelp(plotDisplayName(plot), plotEnum || (fields.length === 1 ? fields[0] : null), true)}</h4><small>${escapeHtml(plot.unit || "单位未知 / 自定义组合")}</small></div>
-        <button type="button" data-toggle-legend="${escapeHtml(plotId)}">${plot.legendVisible ? "隐藏图例" : "显示图例"}</button></header>
+        <div class="explorer-plot-actions">
+          <button class="timeline-toggle${plot.timelineVisible ? " active" : ""}" type="button" data-toggle-plot-timeline="${escapeHtml(plotId)}" aria-pressed="${plot.timelineVisible}" aria-label="${plot.timelineVisible ? "隐藏" : "显示"}事件与告警时间线" title="${hasTimeline ? `${plot.timelineVisible ? "隐藏" : "显示"}事件与告警时间线` : "这份日志没有重要事件"}" ${hasTimeline ? "" : "disabled"}>事件与告警</button>
+          <button type="button" data-toggle-legend="${escapeHtml(plotId)}">${plot.legendVisible ? "隐藏图例" : "显示图例"}</button>
+        </div></header>
       <div class="explorer-legend${plot.legendVisible ? "" : " hidden"}">${legend}</div>
       <div class="canvas-wrap"><canvas aria-label="${escapeHtml(plot.title)}曲线"></canvas></div>
       <div class="plot-readout">移动鼠标查看采样值</div>
@@ -742,7 +826,7 @@ function renderExplorerPlots() {
     const plotId = card.dataset.plotId;
     const fields = groups.get(plotId);
     const canvas = card.querySelector("canvas");
-    explorerState.canvases.set(plotId, {canvas, card, fields});
+    explorerState.canvases.set(plotId, {canvas, card, fields, plot: explorerState.plots.get(plotId)});
     bindCanvasInteractions(canvas);
   });
   drawAllExplorerPlots();
@@ -772,6 +856,14 @@ function curveFieldHelp(label, field, plain = false) {
 }
 
 function handlePlotAction(event) {
+  const clearPinnedEvent = event.target.closest("[data-clear-pinned-event]");
+  if (clearPinnedEvent) {
+    const plot = explorerState.plots.get(clearPinnedEvent.dataset.clearPinnedEvent);
+    if (!plot) return;
+    plot.pinnedTimelineItems = null;
+    drawAllExplorerPlots();
+    return;
+  }
   const remove = event.target.closest("[data-remove-field]");
   if (remove) {
     removeExplorerField(remove.dataset.removeField);
@@ -789,6 +881,15 @@ function handlePlotAction(event) {
   if (toggle) {
     const plot = explorerState.plots.get(toggle.dataset.toggleLegend);
     plot.legendVisible = !plot.legendVisible;
+    renderExplorerPlots();
+    return;
+  }
+  const timelineToggle = event.target.closest("[data-toggle-plot-timeline]");
+  if (timelineToggle && !timelineToggle.disabled) {
+    const plot = explorerState.plots.get(timelineToggle.dataset.togglePlotTimeline);
+    if (!plot) return;
+    plot.timelineVisible = !plot.timelineVisible;
+    if (!plot.timelineVisible) plot.pinnedTimelineItems = null;
     renderExplorerPlots();
   }
 }
@@ -813,34 +914,74 @@ function bindCanvasInteractions(canvas) {
   };
   canvas.onpointerdown = (event) => {
     canvas.setPointerCapture(event.pointerId);
-    canvas._drag = {x: event.clientX, start: explorerState.viewStart, end: explorerState.viewEnd};
+    canvas._drag = {x: event.clientX, y: event.clientY, start: explorerState.viewStart, end: explorerState.viewEnd, moved: false};
   };
   canvas.onpointermove = (event) => {
     const bounds = canvas.getBoundingClientRect();
     if (canvas._drag) {
+      canvas._drag.moved = canvas._drag.moved || Math.hypot(event.clientX - canvas._drag.x, event.clientY - canvas._drag.y) > 3;
+      if (!canvas._drag.moved) return;
       const secondsPerPixel = (canvas._drag.end - canvas._drag.start) / Math.max(1, bounds.width - 72);
       const shift = (canvas._drag.x - event.clientX) * secondsPerPixel;
       setExplorerRange(canvas._drag.start + shift, canvas._drag.end + shift);
     } else {
       const fraction = Math.max(0, Math.min(1, (event.clientX - bounds.left - 54) / Math.max(1, bounds.width - 72)));
       explorerState.hoverTime = explorerState.viewStart + fraction * (explorerState.viewEnd - explorerState.viewStart);
+      canvas.style.cursor = canvasTimelineGroupAt(canvas, event.clientX) ? "pointer" : "crosshair";
     }
     drawAllExplorerPlots();
   };
   canvas.onpointerup = (event) => {
     if (canvas._drag) {
+      const moved = canvas._drag.moved;
       canvas.releasePointerCapture(event.pointerId);
       canvas._drag = null;
-      queueSeriesLoad(0);
+      canvas._suppressTimelineClick = moved;
+      if (moved) {
+        setTimeout(() => { canvas._suppressTimelineClick = false; }, 0);
+        queueSeriesLoad(0);
+      }
     }
   };
   canvas.onpointerleave = () => {
     if (!canvas._drag) {
+      canvas.style.cursor = "crosshair";
       explorerState.hoverTime = null;
       drawAllExplorerPlots();
     }
   };
+  canvas.onclick = (event) => {
+    if (canvas._suppressTimelineClick) {
+      canvas._suppressTimelineClick = false;
+      return;
+    }
+    pinCanvasTimelineGroup(canvas, event.clientX);
+  };
   canvas.ondblclick = resetExplorerView;
+}
+
+function canvasTimelineGroupAt(canvas, clientX) {
+  const plotId = canvas.closest("[data-plot-id]")?.dataset.plotId;
+  const plot = plotId ? explorerState.plots.get(plotId) : null;
+  if (!plot?.timelineVisible) return null;
+  const bounds = canvas.getBoundingClientRect();
+  const markerX = clientX - bounds.left;
+  const left = 54, right = 18;
+  if (markerX < left - 7 || markerX > bounds.width - right + 7) return null;
+  const plotWidth = Math.max(1, bounds.width - left - right);
+  const x = (value) => left + (value - explorerState.viewStart) / (explorerState.viewEnd - explorerState.viewStart) * plotWidth;
+  const groups = groupTimelineItems(importantTimelineItems(explorerState.viewStart, explorerState.viewEnd), x);
+  return nearestTimelineGroup(groups, markerX);
+}
+
+function pinCanvasTimelineGroup(canvas, clientX) {
+  const group = canvasTimelineGroupAt(canvas, clientX);
+  if (!group) return;
+  const plotId = canvas.closest("[data-plot-id]")?.dataset.plotId;
+  const plot = plotId ? explorerState.plots.get(plotId) : null;
+  if (!plot) return;
+  plot.pinnedTimelineItems = group.items.slice();
+  drawAllExplorerPlots();
 }
 
 function setExplorerRange(start, end) {
@@ -874,7 +1015,7 @@ function drawAllExplorerPlots() {
   explorerState.canvases.forEach((entry) => drawExplorerPlot(entry));
 }
 
-function drawExplorerPlot({canvas, card, fields}) {
+function drawExplorerPlot({canvas, card, fields, plot}) {
   const bounds = canvas.getBoundingClientRect();
   const width = Math.max(320, Math.round(bounds.width || 700));
   const height = Math.max(260, Math.round(bounds.height || 320));
@@ -903,6 +1044,9 @@ function drawExplorerPlot({canvas, card, fields}) {
   minY -= pad; maxY += pad;
   const x = (value) => margin.left + (value - explorerState.viewStart) / (explorerState.viewEnd - explorerState.viewStart) * plotWidth;
   const y = (value) => margin.top + (maxY - value) / (maxY - minY) * plotHeight;
+  const timelineGroups = plot.timelineVisible
+    ? groupTimelineItems(importantTimelineItems(explorerState.viewStart, explorerState.viewEnd), x)
+    : [];
 
   context.font = '11px Inter, "Microsoft YaHei UI", sans-serif';
   context.lineWidth = 1;
@@ -926,12 +1070,15 @@ function drawExplorerPlot({canvas, card, fields}) {
     });
     context.stroke();
   });
+  drawCanvasTimeline(context, timelineGroups, margin.top, height - margin.bottom);
   context.fillStyle = "#788581";
   context.fillText(`${formatNumber(explorerState.viewStart)} s`, margin.left, height - 7);
   const endText = `${formatNumber(explorerState.viewEnd)} s`;
   context.fillText(endText, width - margin.right - context.measureText(endText).width, height - 7);
 
   const readout = card.querySelector(".plot-readout");
+  readout.classList.toggle("timeline-active", plot.timelineVisible);
+  const pinnedEventGroup = plot.pinnedTimelineItems?.length ? {items: plot.pinnedTimelineItems} : null;
   if (explorerState.hoverTime !== null) {
     const cursorX = x(explorerState.hoverTime);
     context.strokeStyle = "#526761";
@@ -944,10 +1091,87 @@ function drawExplorerPlot({canvas, card, fields}) {
       const decoded = decodeCurveValue(line, point[1]);
       return `<span><i style="background:${seriesColor(line.key)}"></i>${escapeHtml(line.name)}: <strong>${escapeHtml(formatNumber(point[1]))}</strong>${decoded ? `<em>${escapeHtml(decoded)}</em>` : ""}</span>`;
     }).join("");
-    readout.innerHTML = `<b>${formatNumber(explorerState.hoverTime)} s</b>${values}`;
+    const eventGroup = pinnedEventGroup || nearestTimelineGroup(timelineGroups, cursorX);
+    const eventReadout = plot.timelineVisible
+      ? timelineReadout(eventGroup, timelineGroups.length ? "将鼠标移到事件标记附近查看详情，点击可固定" : "当前时间范围没有重要事件", Boolean(pinnedEventGroup), plot.id)
+      : "";
+    readout.innerHTML = `<b>${formatNumber(explorerState.hoverTime)} s</b>${values}${eventReadout}`;
   } else {
-    readout.textContent = visibleLines.length ? "移动鼠标查看采样值" : "当前时间范围没有可显示的数据";
+    const hint = visibleLines.length
+      ? `移动鼠标查看采样值${plot.timelineVisible ? "和事件" : ""}`
+      : plot.timelineVisible && timelineGroups.length ? "移动鼠标查看事件" : "当前时间范围没有可显示的数据";
+    const eventReadout = plot.timelineVisible
+      ? timelineReadout(pinnedEventGroup, timelineGroups.length ? "将鼠标移到事件标记附近查看详情，点击可固定" : "当前时间范围没有重要事件", Boolean(pinnedEventGroup), plot.id)
+      : "";
+    readout.innerHTML = `<span>${escapeHtml(hint)}</span>${eventReadout}`;
   }
+}
+
+function drawCanvasTimeline(context, groups, top, bottom) {
+  if (!groups.length) return;
+  context.save();
+  groups.forEach((group) => {
+    const severity = timelineGroupSeverity(group.items);
+    context.strokeStyle = TIMELINE_COLORS[severity];
+    context.fillStyle = TIMELINE_COLORS[severity];
+    context.globalAlpha = .78;
+    context.lineWidth = 1;
+    context.setLineDash([4, 3]);
+    context.beginPath();
+    context.moveTo(group.position, top);
+    context.lineTo(group.position, bottom);
+    context.stroke();
+    context.setLineDash([]);
+    context.beginPath();
+    context.moveTo(group.position, bottom);
+    context.lineTo(group.position - 5, bottom + 8);
+    context.lineTo(group.position + 5, bottom + 8);
+    context.closePath();
+    context.fill();
+  });
+  context.restore();
+}
+
+function nearestTimelineGroup(groups, cursorX, tolerance = 7) {
+  let nearest = null;
+  let distance = tolerance + 1;
+  groups.forEach((group) => {
+    const current = Math.abs(group.position - cursorX);
+    if (current <= tolerance && current < distance) {
+      nearest = group;
+      distance = current;
+    }
+  });
+  return nearest;
+}
+
+function timelineReadout(group, emptyText = "将鼠标移到事件标记附近查看详情，点击可固定", pinned = false, plotId = "") {
+  if (!group) {
+    return `<section class="plot-event-readout empty">
+      <header class="plot-event-header"><strong>事件与告警</strong></header>
+      <div class="plot-event-empty">${escapeHtml(emptyText)}</div>
+    </section>`;
+  }
+  const severity = timelineGroupSeverity(group.items);
+  const rows = group.items.map((item) => {
+    const itemSeverity = item.severity || "info";
+    const repeated = Number(item.count) > 1 ? ` ×${Number(item.count)}` : "";
+    return `<div class="plot-event-row" role="listitem">
+      <span class="plot-event-severity ${escapeHtml(itemSeverity)}">${escapeHtml(timelineSeverities[itemSeverity] || itemSeverity)}</span>
+      <span class="plot-event-category">${escapeHtml(timelineCategories[item.category] || item.category)}</span>
+      <span class="plot-event-title">${escapeHtml(item.title)}${escapeHtml(repeated)}</span>
+    </div>`;
+  }).join("");
+  const first = Number(group.items[0].time_s);
+  const last = Number(group.items.at(-1).time_s);
+  const time = first === last ? formatTimelineTime(first) : `${formatTimelineTime(first)}–${formatTimelineTime(last)}`;
+  const pinnedControls = pinned
+    ? `<span class="plot-event-pinned">已固定</span><button type="button" data-clear-pinned-event="${escapeHtml(plotId)}" aria-label="取消固定事件详情">取消固定</button>`
+    : "";
+  return `<section class="plot-event-readout ${severity}">
+    <header class="plot-event-header"><strong>事件 ${escapeHtml(time)} · ${group.items.length} 条</strong><div class="plot-event-controls">${pinnedControls}</div></header>
+    <div class="plot-event-list" role="list">${rows}</div>
+  </section>`;
 }
 
 function decodeCurveValue(line, value) {
