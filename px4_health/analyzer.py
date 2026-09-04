@@ -1070,6 +1070,15 @@ def _vehicle_type(log: ULog) -> tuple[str, bool]:
     return "未记录", True
 
 
+def _vehicle_compatibility_warning(vehicle: str, supported: bool) -> str | None:
+    if supported:
+        return None
+    return (
+        f"检测到当前机型为{vehicle}。本工具目前只支持多旋翼问题分析，"
+        "以下问题判断可能有误，请谨慎参考。"
+    )
+
+
 def _overall_summary(metrics: list[dict[str, Any]]) -> str:
     status_rank = {"normal": 0, "unavailable": 0, "warning": 1, "severe": 2}
     official_metrics = [item for item in metrics if item.get("affects_overall", True)]
@@ -1095,8 +1104,6 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
     if log.last_timestamp <= log.start_timestamp:
         raise AnalysisError("日志中没有可分析的时序数据。")
     vehicle, supported = _vehicle_type(log)
-    if not supported:
-        raise AnalysisError(f"检测到{vehicle}日志；首版仅支持 PX4 多旋翼。")
     start, end, scope, has_flight = _flight_window(log)
     from .timeline import build_timeline
     timeline = build_timeline(log)
@@ -1148,6 +1155,8 @@ def analyze_ulog(path: str | Path, display_name: str | None = None) -> dict[str,
             "duration_s": round((log.last_timestamp - log.start_timestamp) / 1e6, 1),
             "flight_duration_s": round(max(0, end - start) / 1e6, 1),
             "vehicle_type": vehicle,
+            "vehicle_type_supported": supported,
+            "vehicle_compatibility_warning": _vehicle_compatibility_warning(vehicle, supported),
             "px4_version": str(log.msg_info_dict.get("ver_sw", "未记录")),
             "scope": scope,
             "rule_version": RULES["version"],

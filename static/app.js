@@ -139,9 +139,13 @@ function renderResults(data) {
   $("#overallTitle").textContent = data.overall;
   $("#scopeText").textContent = data.meta.scope;
   $("#disclaimer").textContent = `安全提示：${data.disclaimer}`;
+  const vehicleWarning = $("#vehicleWarning");
+  const compatibilityWarning = data.meta.vehicle_compatibility_warning;
+  vehicleWarning.textContent = compatibilityWarning || "";
+  vehicleWarning.classList.toggle("hidden", !compatibilityWarning);
   const meta = [
     ["日志文件", data.meta.filename],
-    ["机型（目前只分析多旋翼）", data.meta.vehicle_type],
+    ["机型", data.meta.vehicle_type],
     ["日志时长", `${data.meta.duration_s} 秒`],
     ["分析时段", `${data.meta.flight_duration_s} 秒`],
     ["规则 / 算法", `${data.meta.rule_version} / ${data.meta.algorithm_version || "v1"}`],

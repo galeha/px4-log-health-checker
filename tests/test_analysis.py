@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -10,7 +11,10 @@ from px4_health.analyzer import (
     _magnetometer,
     _motors,
     _overall_summary,
+    _vehicle_compatibility_warning,
+    _vehicle_type,
     _vibration,
+    analyze_ulog,
 )
 
 
@@ -26,6 +30,7 @@ class FakeLog:
         self.data_list = datasets
         self.initial_parameters = parameters or {}
         self.changed_parameters = []
+        self.msg_info_dict = {}
         self.start_timestamp = 0
         self.last_timestamp = 10_000_000
 
@@ -35,6 +40,40 @@ def timestamps(count=100):
 
 
 class AnalysisRuleTests(unittest.TestCase):
+    def test_non_multirotor_gets_compatibility_warning(self):
+        t = timestamps(3)
+        log = FakeLog([Dataset("vehicle_status", {
+            "timestamp": t,
+            "vehicle_type": np.full(len(t), 2),
+            "is_vtol": np.zeros(len(t)),
+        })])
+        vehicle, supported = _vehicle_type(log)
+        warning = _vehicle_compatibility_warning(vehicle, supported)
+
+        self.assertEqual(vehicle, "固定翼")
+        self.assertFalse(supported)
+        self.assertIn("目前只支持多旋翼问题分析", warning)
+        self.assertIn("判断可能有误", warning)
+
+    def test_analyze_ulog_does_not_reject_fixed_wing(self):
+        t = timestamps(3)
+        log = FakeLog([Dataset("vehicle_status", {
+            "timestamp": t,
+            "vehicle_type": np.full(len(t), 2),
+            "is_vtol": np.zeros(len(t)),
+        })])
+
+        with patch("px4_health.analyzer.ULog", return_value=log):
+            result = analyze_ulog("fixed-wing.ulg")
+
+        self.assertEqual(result["meta"]["vehicle_type"], "固定翼")
+        self.assertFalse(result["meta"]["vehicle_type_supported"])
+        self.assertIn("判断可能有误", result["meta"]["vehicle_compatibility_warning"])
+        self.assertEqual(len(result["metrics"]), 6)
+
+    def test_multirotor_has_no_compatibility_warning(self):
+        self.assertIsNone(_vehicle_compatibility_warning("多旋翼", True))
+
     @staticmethod
     def _mag_log(magnetic_x, extra=None, parameters=None):
         t = np.linspace(500_000, 11_500_000, len(magnetic_x), dtype=np.int64)

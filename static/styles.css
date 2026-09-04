@@ -93,6 +93,7 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(34px, 4.8vw, 58px); line-heig
 .result-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
 .result-heading h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.03em; }
 .result-heading > div > p:last-child { margin: 10px 0 0; color: var(--muted); }
+.vehicle-warning { margin-bottom: 18px; padding: 14px 16px; border: 1px solid #e9b85d; border-left: 4px solid var(--amber); border-radius: 12px; color: #73551b; background: #fff7e5; font-size: 13px; font-weight: 700; line-height: 1.65; }
 .meta-grid { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
 .meta-item { min-width: 0; padding: 14px 16px; background: rgba(255,255,255,.7); border: 1px solid var(--line); border-radius: 13px; }
 .meta-item span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
