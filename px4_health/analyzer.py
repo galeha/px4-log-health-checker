@@ -426,7 +426,7 @@ def _magnetometer_unavailable(log: ULog, reason: str, quality: dict[str, Any] | 
     result = _unavailable("magnetometer", "磁力计异常（实验）", reason, log)
     result.update({
         "experimental": True,
-        "affects_overall": False,
+        "affects_overall": True,
         "experimental_rule_version": MAG_RULES["version"],
         "power_relation": "无法判断",
         "rule_hits": [],
@@ -634,10 +634,10 @@ def _magnetometer(log: ULog, start: int, end: int) -> dict[str, Any]:
             "磁场模长由三轴磁场计算，比单独观察 X/Y/Z 更不容易把姿态旋转误判为干扰。",
             "磁场异常只能说明磁环境或传感器存在问题；只有它随电流或电机输出同步变化时，才提示疑似动力相关。",
             "电机输出是低可信度负载代理，不等同于实测动力电流；孤立尖峰不会单独触发严重等级。",
-            "该指标属于实验规则，不参与顶部总评。",
+            "该指标属于实验规则，其判断等级会参与顶部总评。",
         ],
         "evidence": evidence, "series": series, "data_sources": sources, "parameters": _parameters(log, "magnetometer"),
-        "experimental": True, "affects_overall": False, "experimental_rule_version": MAG_RULES["version"],
+        "experimental": True, "affects_overall": True, "experimental_rule_version": MAG_RULES["version"],
         "power_relation": power_relation, "rule_hits": hits or ["未触发实验规则的提醒或严重条件。"],
         "data_quality": quality, "anomaly_windows": anomaly_windows,
     }

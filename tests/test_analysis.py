@@ -55,7 +55,7 @@ class AnalysisRuleTests(unittest.TestCase):
         self.assertNotIn("动力干扰", result["name"])
         self.assertEqual(result["power_relation"], "无法判断")
         self.assertTrue(result["experimental"])
-        self.assertFalse(result["affects_overall"])
+        self.assertTrue(result["affects_overall"])
 
     def test_magnetometer_selects_dynamic_propulsion_battery_instance(self):
         count = 120
@@ -150,12 +150,12 @@ class AnalysisRuleTests(unittest.TestCase):
         self.assertEqual(result["status"], "unavailable")
         self.assertTrue(result["experimental"])
 
-    def test_experimental_magnetometer_does_not_change_overall(self):
+    def test_experimental_magnetometer_changes_overall(self):
         metrics = [
             {"id": "vibration", "status": "normal"},
-            {"id": "magnetometer", "status": "severe", "affects_overall": False},
+            {"id": "magnetometer", "status": "severe", "affects_overall": True},
         ]
-        self.assertEqual(_overall_summary(metrics), "未发现明显异常")
+        self.assertEqual(_overall_summary(metrics), "存在严重风险项目")
 
     def test_gps_bad_fix_is_severe(self):
         t = timestamps()

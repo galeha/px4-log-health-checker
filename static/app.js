@@ -115,7 +115,7 @@ async function analyze(file) {
   }
   showOnly(progressPanel);
   $("#progressTitle").textContent = `正在分析 ${file.name}`;
-  $("#progressText").textContent = "正在识别飞行阶段、计算五项正式指标和磁力计实验指标…";
+  $("#progressText").textContent = "正在识别飞行阶段、计算六项健康指标";
   try {
     const response = await fetch("/api/analyze", {
       method: "POST",
@@ -184,7 +184,7 @@ function renderTimeline(timeline) {
   panel.classList.remove("hidden");
   const summary = timeline.summary || {};
   $("#timelineSummaryText").textContent = summary.severe_count || summary.warning_count
-    ? `记录到 ${summary.severe_count || 0} 条严重事件、${summary.warning_count || 0} 条警告。时间线不会改变五项健康总评。`
+    ? `记录到 ${summary.severe_count || 0} 条严重事件、${summary.warning_count || 0} 条警告。时间线不会改变六项健康总评。`
     : "没有记录到重要告警；可切换到“全部事件”查看模式和起降过程。";
   $("#timelineSummaryBadges").innerHTML = `
     <span class="severe">严重 ${escapeHtml(summary.severe_count || 0)}</span>
@@ -338,7 +338,7 @@ function metricCard(metric, index) {
   return `<article class="metric-card ${escapeHtml(metric.status)}">
     <button class="metric-summary" type="button" aria-label="展开${escapeHtml(metric.name)}详情">
       <span class="metric-number">0${index + 1}</span>
-      <span class="metric-name">${escapeHtml(metric.name)}${metric.experimental ? `<em class="experimental-badge">不影响总评</em>` : ""}</span>
+      <span class="metric-name">${escapeHtml(metric.name)}${metric.experimental ? `<em class="experimental-badge">实验规则 · 计入总评</em>` : ""}</span>
       <span class="status-pill">${escapeHtml(metric.label)}<span class="status-tooltip" role="tooltip"><strong>全部判断等级</strong><span>${(metricLevels[metric.id] || ["正常", "提醒", "严重", "数据不足"]).map(escapeHtml).join("　/　")}</span></span></span>
       <span class="metric-brief">${escapeHtml(metric.summary)}</span>
       <span class="chevron">⌄</span>
@@ -364,7 +364,7 @@ function explainabilitySection(metric) {
   return `<section class="explainability-section">
     <h4>结论可追溯信息</h4>
     ${qualityHtml ? `<div class="quality-grid">${qualityHtml}</div>` : ""}
-    ${hits ? `<div class="rule-hit-list"><strong>${metric.experimental ? "实验规则（不影响总评）" : "当前 v1 规则"}</strong><ul>${hits}</ul></div>` : ""}
+    ${hits ? `<div class="rule-hit-list"><strong>${metric.experimental ? "实验规则（计入总评）" : "当前 v1 规则"}</strong><ul>${hits}</ul></div>` : ""}
     ${notes ? `<div class="quality-notes"><strong>数据限制</strong><ul>${notes}</ul></div>` : ""}
     ${windows ? `<div class="anomaly-windows"><strong>${metric.experimental ? "磁场异常时间段" : "候选算法发现的异常时间段"}</strong><div class="anomaly-window-list" data-expanded="false">${windows}</div><button class="anomaly-more" type="button" data-anomaly-more>更多</button></div>` : ""}
     ${candidate}
